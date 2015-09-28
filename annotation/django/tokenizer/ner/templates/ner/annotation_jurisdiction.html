@@ -1,0 +1,330 @@
+{% extends "ner/ner_base.html" %}
+
+{% block style %}
+<style type="text/css">
+.token {
+  background-color: transparent;
+  float: left;
+}
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script type="text/javascript">
+  function prepareDivContainer2() {
+    $('div.tokengroup').click(function() {
+      if (!inSuperMode) {
+        var isNormalSelected = false;
+        var isSuperSelected = false;
+        $(this).children().each(function (i, node) {
+          if ($(node).hasClass("normal-selected")) {
+            isNormalSelected = true;
+          }
+          if ($(node).hasClass("super-selected")) {
+            isSuperSelected = true;
+          }
+        });
+
+        if (isNormalSelected) {
+          maybe_remove_colored_selection();
+
+          // unselect, clear category selection as well, keep only token class
+          $(this).children().each(function (i, node) {
+            $(node).removeClass();
+            $(node).addClass("token");
+
+            $(node).data('segmentId', '');
+          });
+        } else if (!isSuperSelected) {
+          maybe_remove_colored_selection();
+
+          // select
+          var segmentId = guid();
+          $(this).children().each(function (i, node) {
+            // remove catogory selection, keep only token class
+            $(node).removeClass();
+            $(node).addClass("token");
+
+            $(node).addClass("selected normal-selected");
+
+            $(node).data('segmentId', segmentId);
+          });
+        }
+      }
+    });
+  }
+</script>
+
+<script type="text/javascript">
+  function addCSSRule(sheet, selector, rules, index) {
+    if("insertRule" in sheet) {
+      sheet.insertRule(selector + "{" + rules + "}", index);
+    }
+    else if("addRule" in sheet) {
+      sheet.addRule(selector, rules, index);
+    }
+  }
+
+  var dynamicSheet = (function() {
+    // Create the <style> tag
+    var style = document.createElement("style");
+    // WebKit hack :(
+    style.appendChild(document.createTextNode(""));
+    // Add the <style> element to the page
+    document.head.appendChild(style);
+    return style.sheet;
+  })();
+
+  function prepareLabels() {
+    {% for category in categories %}
+      $("#"+"{{category.name}}").css("background-color", "#"+intToRGB(hashCode("{{category.name}}")));
+      addCSSRule(dynamicSheet, "." + "{{category.name}}" + "tokens", "background-color: #"+intToRGB(hashCode("{{category.name}}")));
+    {% endfor %}
+    addCSSRule(dynamicSheet, ".selected", "background-color: #585858");
+  }
+</script>
+
+<script type="text/javascript">
+  function loadAnnotatedTokens() {
+    {% for result_item in result_set %}
+      var startIndex = {{ result_item.start_position }};
+      var endIndex = {{ result_item.end_position }};
+      var segmentId = guid();
+      for(var i = startIndex; i <= endIndex; ++i) {
+        var div_id = "#token" + i;
+        $(div_id).addClass("{{ result_item.category.name }}" + "tokens");
+        $(div_id).data('segmentId', segmentId);
+      }
+    {% endfor %}
+  }
+</script>
+
+<script type="text/javascript">
+  var inSuperMode = false;
+
+  function initializeSuperMode() {
+    $(document).keydown(function (event) {
+      if (event.which === 65) {
+        inSuperMode = true;
+      }
+    });
+    $(document).keyup(function (event) {
+      if (event.which === 65) {
+        //console.log(window.getSelection().toString());
+        S = window.getSelection();
+        R = S.getRangeAt(0);
+
+        // only allow selection if it doen't cross lines
+        if (S.toString().indexOf('\n') === -1) {
+          maybe_remove_colored_selection();
+
+          var startToken = $(R.startContainer.parentNode)[0];
+          if ($(R.endContainer).is("div")) {
+            // somehow the endContainer might be the element after the last selected token, special handling here
+            var lastIndex = +($(R.endContainer).attr("id").substr("token".length)) - 1;
+            var endToken = $("#token" + lastIndex)[0];
+          } else {
+            var endToken = $(R.endContainer.parentNode)[0];
+          }
+
+          var startIndex = +($(startToken).attr("id").substr("token".length));
+          var endIndex = +($(endToken).attr("id").substr("token".length));
+          var startGroupIndex = +($(startToken.parentNode).attr("id").substr("tokengroup".length));
+          var endGroupIndex = +($(endToken.parentNode).attr("id").substr("tokengroup".length));
+
+          // remove affected normal selected tokens
+          for(var i = startGroupIndex; i <= endGroupIndex; ++i) {
+            var groupNode = $("#tokengroup" + i);
+            groupNode.children().each(function (i, node) {
+              $(node).removeClass("normal-selected");
+
+              $(node).data('segmentId', '');
+            });
+          }
+
+          // super select
+          var segmentId = guid();
+          for(var i = startIndex; i <= endIndex; ++i) {
+            var node = $("#token" + i);
+            node.addClass("selected super-selected");
+
+            node.data('segmentId', segmentId);
+          }
+
+          // do not propagate to tokengroup
+          event.stopPropagation();
+        }
+
+        inSuperMode = false;
+      }
+    });
+
+    $('div.token').click(function(event) {
+      if ($(this).hasClass("super-selected")) {
+        maybe_remove_colored_selection();
+
+        // find the begining and end of super-selected tokens
+        var currentIndex = +($(this).attr("id").substr("token".length));
+        var segmentId = $(this).data('segmentId');
+        for(var startIndex = currentIndex - 1; startIndex >= 1; --startIndex) {
+          var node = $("#token" + startIndex);
+          if (!node.hasClass("super-selected") || node.data('segmentId') != segmentId) {
+            break;
+          }
+        }
+        startIndex += 1;
+        for(var endIndex = currentIndex + 1; endIndex <= totalNumTokens; ++endIndex) {
+          var node = $("#token" + endIndex);
+          if (!node.hasClass("super-selected") || node.data('segmentId') != segmentId) {
+            break;
+          }
+        }
+        endIndex -= 1;
+
+        // remove super-selected tokens
+        for(var i = startIndex; i <= endIndex; ++i) {
+          $("#token" + i).removeClass();
+          $("#token" + i).addClass("token");
+
+          $("#token" + i).data('segmentId', '');
+        }
+
+        // do not propagate to tokengroup
+        event.stopPropagation();
+      }
+    });
+  }
+</script>
+
+<script type="text/javascript">
+  var justColored = false;
+
+  function color_selected(category_name) {
+    {% for category in categories %}
+      $(".selected").removeClass("{{category.name}}" + "tokens");
+    {% endfor %}
+    $(".selected").addClass(category_name + "tokens");
+    justColored = true;
+  }
+
+  function maybe_remove_colored_selection() {
+    if (justColored) {
+      $(".selected").removeClass("selected normal-selected super-selected");
+    }
+    justColored = false;
+  }
+</script>
+
+<script type="text/javascript">
+  function save_annotation(callback) {
+    var results = [];
+
+    var result_category_name = [];
+    var result_position = [];
+    var result_text = [];
+
+    {% for category in categories %}
+      var class_name = "{{ category.name }}" + "tokens";
+      var current_divs = $("."+class_name);
+      var indices = $("."+class_name).map(function(i, node) {
+        return +($(node).attr("id").substr("token".length));
+      });
+      var segmentIds = $("."+class_name).map(function(i, node) {
+        return $(node).data('segmentId');
+      });
+      if (indices.length > 0) {
+        var startIndex = 0;
+        var text = $("#token" + indices[startIndex]).text();
+        var segmentId = $("#token" + indices[startIndex]).data('segmentId');
+        while(true) {
+          for(var endIndex = startIndex + 1; endIndex < indices.length; ++endIndex) {
+            if (indices[endIndex] - indices[endIndex - 1] > 1 ||
+                $("#token" + indices[endIndex]).data('segmentId') != segmentId) {
+              break;
+            } else {
+              text += $("#token" + indices[endIndex]).text();
+            }
+          }
+          endIndex -= 1;
+          results.push({
+            category_name: "{{ category.name }}",
+            text: text,
+            start_position: indices[startIndex],
+            end_position: indices[endIndex]
+          });
+          if (endIndex + 1 === indices.length) {
+            break;
+          }
+          startIndex = endIndex + 1;
+          text = $("#token" + indices[startIndex]).text();
+          var segmentId = $("#token" + indices[startIndex]).data('segmentId');
+        }
+      }
+    {% endfor %}
+
+    console.log(results);
+
+    // send POST request
+    $.ajax({
+      type: "POST",
+      url: "{% url 'save_annotation' %}",
+      data: {
+        file_name: "{{ file_name }}",
+        results: JSON.stringify(results),
+        comment_text: $("#comment_text").text(),
+        csrfmiddlewaretoken: getCookie('csrftoken')
+      },
+      success: function(d){
+        if (callback) {
+          callback();
+        }
+      },
+    });
+  }
+</script>
+
+<script type="text/javascript">
+  function submit_annotation() {
+    save_annotation(function() {
+      var file_state = "{{ file_state }}";
+      // send POST request
+      $.ajax({
+        type: "POST",
+        url: "{% url 'submit_annotation' %}",
+        data: {
+          "file_name": "{{ file_name }}",
+          "file_id": "{{ file_id }}",
+          "submit_type": "jurisdiction",
+          csrfmiddlewaretoken: getCookie('csrftoken')
+        },
+        success: function(d){
+          alert('审核结果已记录并提交。');
+        },
+      });
+    });
+  }
+</script>
+{% endblock %}
+
+{% block body-initializations %}
+prepareDivContainer2(); prepareLabels(); loadAnnotatedTokens(); initializeSuperMode();
+{% endblock %}
+
+{% block buttons %}
+   <div class="col-xs-1">
+     <button type="button" class="btn btn-primary btn-md" onclick='save_annotation(function() {alert("成功保存");});'>
+       保存
+     </button>
+   </div>
+   <div class="col-xs-1">
+     <button type="button" class="btn btn-success btn-md" onclick="submit_annotation();">
+       完成审核
+     </button>
+   </div>
+{% endblock %}
+
+{% block labels %}
+{% for category in categories %}
+  <button id="{{category.name}}" class="btn btn-md" onclick="color_selected('{{ category.name }}');">{{ category.name }}</button>
+{% endfor %}
+{% endblock %}

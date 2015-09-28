@@ -1,0 +1,46 @@
+{% load staticfiles %}
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <link href="{% static 'editor/css/bootstrap.min.css' %}" rel="stylesheet">
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h3 class="text-muted">Welcome</h3>
+      </div>
+      <hr />
+       <div class="row">
+       <!-- Display the current logged in username and the link to logout
+        -->
+      <div class="alert alert-success">用户名 {{ username }}.</div>
+      <!-- 'url' template tage takes the name of the URL pattern
+           as an argument and renders the URL path. Here it renders
+           the path to the logout URL.
+      -->
+      <a href="{% url 'logout_editor' %}">登出</a>
+
+      <h4><a href="{% url 'workspace_root' %}">返回任务选择菜单</a></h4>
+         
+       </div>
+       </div>
+    </div>
+    <div class="container">
+      <div class="header">
+        <h3 class="text-muted">标注进度</h3>
+      </div>
+      <br/>
+      <h4 class="text-muted">共分配: {{total_assigned}}, 已完成分词: {{total_tokenized}}, 已完成审核: {{total_adjudicated}}</h4>
+      <br/>
+      <h4 class="text-muted">每人完成情况</h4>
+      <table class='table table-hover' style='cursor: pointer;'>
+        <thead><tr><th>账号</th><th>共分配分词</th><th>已完成分词</th><th>共分配审核</th><th>已完成审核</th></tr></thead>
+        <tbody>
+        {% for user_progress in user_progresses %}
+          <tr><td>{{user_progress.username}}</td><td>{{user_progress.num_assigned}}</td><td>{{user_progress.num_completed}}</td><td>{{user_progress.num_jurisdiction_assigned}}</td><td>{{user_progress.num_jurisdiction_completed}}</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </body>
+</html>

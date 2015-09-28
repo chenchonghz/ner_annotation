@@ -1,0 +1,27 @@
+body {
+	font-family: "Microsoft YaHei", 微软雅黑, sans-serif;
+}
+
+.text {
+	float: left;
+	width: 20px;
+	height: 20px;
+}
+
+.separator {
+	float: left;
+	width: 6px;
+	height: 20px;
+	border-left: 7px solid white;
+	border-right: 7px solid white;
+}
+
+.separator.active {
+	background-color: yellow;
+	border-left: 7px solid yellow;
+	border-right: 7px solid yellow;
+}
+
+.separator.separated {
+	background-color: red;
+}

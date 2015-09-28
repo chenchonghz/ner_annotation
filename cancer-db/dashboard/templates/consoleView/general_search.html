@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+{% extends "base.html" %}
+
+{% load staticfiles %}
+
+
+{%block content%}
+    <div class="content-wrapper">
+        {% include "infoView/banner.html"%}
+
+        <ul class="breadcrumb">
+          <li><a href="/">主页</a></li>
+          <li><a href="/dashboard/">控制台</a></li>
+          <li class="active">搜索</li>
+        </ul>
+        <!-- Content Header (Page header) -->
+        <section class="content-header">
+          <h1>
+            数据库
+          </h1>
+        </section>
+        <!-- Main content -->
+        <section class="content">
+          <div class="row">
+            <div class="col-xs-12">
+
+              <div class="box">
+                <div class="box-header">
+                </div><!-- /.box-header -->
+                <div class="box-body">
+        
+                    <table class="table table-bordered table-striped" id="recent" class="display" cellspacing="0" width="100%" >
+                        <thead>
+                            <tr>
+                                <th colspan="6">病人基本信息</th> 
+
+                            </tr>
+                            <tr>
+                                <th>姓名</th>
+                                <th>病历号</th>
+                                <th>性别</th>
+                                <th>出生年月</th>
+
+                                <th>病人基本信息-隐藏</th>
+                                <!--hidden fields-->
+
+                            </tr>
+                        </thead>
+
+
+                        <tbody>
+                                {% for patient in patients %}
+                                <tr>
+                                    <td><a href="{{patient.get_absolute_url}}">{{patient.name}}</a></td>
+                                    <td><a href="{{patient.get_absolute_url}}">{{patient.get_standard_EMR_id}}</a></td>
+                                    <td>{{patient.sex}}</td>
+                                    <td>{{patient.get_standard_DOB_date}}</td>
+
+                                    <td>{{patient.sex}} | {{patient.DOB}} | {{patient.social_id}} | {{patient.location}} |{{patient.DOD}}</td>
+
+                                </tr>
+
+                                {% endfor %}
+                        </tbody>
+                    </table>
+
+                </div><!-- /.box-body -->
+              </div><!-- /.box -->
+            </div><!-- /.col -->
+          </div><!-- /.row -->
+        </section><!-- /.content -->
+    </div>
+{%endblock%}
+
+
+{%block endscript%}
+    <script src="{% static "js/jquery.dataTables.js" %}"></script>
+    <link rel="stylesheet" href="{% static "css/jquery.dataTables.css" %}" />
+    
+    <style>
+        div.dataTables_filter {
+            text-align: left;
+        }
+        .col-sm-6 {
+            width: 20%;
+        }
+      .filterMatches { background-color: #FFFF00; }
+
+    </style>
+
+    <script>
+    function getCookie(name) {
+        var cookieValue = null;
+        if (document.cookie && document.cookie != '') {
+            var cookies = document.cookie.split(';');
+            for (var i = 0; i < cookies.length; i++) {
+                var cookie = jQuery.trim(cookies[i]);
+                // Does this cookie string begin with the name we want?
+                if (cookie.substring(0, name.length + 1) == (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
+    $.extend( $.fn.DataTable.defaults, {
+        "searching": true,
+        "ordering": true
+    } );
+
+    $(document).ready(function() {
+
+        // //hide empty columns
+        // $('#recent tr th').each(function(i) {
+        //  //select all tds in this column
+        //  var tds = $(this).parents('table')
+        //           .find('tr td:nth-child(' + (i + 1) + ')');
+        //     //check if all the cells in this column are empty
+        //     if(tds.length == tds.filter(':empty').length) { 
+        //         //hide header
+        //         $(this).hide();
+        //         //hide cells
+        //         tds.hide();
+        //     } 
+        // });
+
+        var table = $('#recent').DataTable( {
+            //highlight search text, CHECK
+            "fnRowCallback": function( nRow, aData, iDisplayIndex, iDisplayIndexFull) {
+                var settings = this.fnSettings();
+                var str = settings.oPreviousSearch.sSearch;
+                var regex = new RegExp( str, 'i');
+                $('td', nRow).each( function(i) {
+                    this.innerHTML = aData[i].replace( regex, function(matched) { return "<span class='filterMatches'>"+matched+"</span>";});
+                });
+                return nRow;
+            },
+
+
+            "language": {
+                "url": "//cdn.datatables.net/plug-ins/1.10.8/i18n/Chinese.json"
+            },
+            //"scrollX": "100%",
+            "scrollY": 450,
+            "pageLength": 100,
+            //"bAutoWidth": true ,
+            //"fixedHeader": true,
+            "order": [[ 0, "desc" ]],
+
+            "columnDefs": [
+                {"className": "dt-center","targets": "_all"},
+                { "visible": false,  "targets": [ ] }
+            ]
+
+
+        } );
+
+        var HIDDEN_COLUMN_INDEX = 4;
+
+        table.on('search', function () {
+            if (table.search().length) {
+                table.column(HIDDEN_COLUMN_INDEX).visible(true);
+            } else {
+                table.column(HIDDEN_COLUMN_INDEX).visible(false);
+            }
+        });
+
+        table.column(HIDDEN_COLUMN_INDEX).visible(false);
+
+        $('#download-csv').click(function() {
+            var filtered = table.rows({filter:'applied'})[0];
+            $.ajax({
+                method: 'POST',
+                url: 'download',
+                data: {
+                    indexes: filtered,
+                    csrfmiddlewaretoken: getCookie('csrftoken'),
+                },
+                success: function(response, status, xhr) {
+                    // check for a filename
+                    var filename = '';
+                    var disposition = xhr.getResponseHeader('Content-Disposition');
+                    if (disposition && disposition.indexOf('attachment') !== -1) {
+                        var filenameRegex = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/;
+                        var matches = filenameRegex.exec(disposition);
+                        if (matches != null && matches[1]) filename = matches[1].replace(/['"]/g, '');
+                    }
+
+                    var type = xhr.getResponseHeader('Content-Type');
+                    var blob = new Blob([response], { type: type });
+
+                    if (typeof window.navigator.msSaveBlob !== 'undefined') {
+                        // IE workaround for "HTML7007: One or more blob URLs were revoked by closing the blob for which they were created. These URLs will no longer resolve as the data backing the URL has been freed."
+                        window.navigator.msSaveBlob(blob, filename);
+                    } else {
+                        var URL = window.URL || window.webkitURL;
+                        var downloadUrl = URL.createObjectURL(blob);
+
+                        if (filename) {
+                            // use HTML5 a[download] attribute to specify filename
+                            var a = document.createElement("a");
+                            // safari doesn't support this yet
+                            if (typeof a.download === 'undefined') {
+                                window.location = downloadUrl;
+                            } else {
+                                a.href = downloadUrl;
+                                a.download = filename;
+                                document.body.appendChild(a);
+                                a.click();
+                            }
+                        } else {
+                            window.location = downloadUrl;
+                        }
+
+                        setTimeout(function () { URL.revokeObjectURL(downloadUrl); }, 100); // cleanup
+                    }
+                }
+            });
+        });
+
+    } ); //table end
+    </script>
+{%endblock%}

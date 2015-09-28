@@ -1,0 +1,262 @@
+{% load staticfiles %}
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <link href="{% static 'editor/css/bootstrap.min.css' %}" rel="stylesheet">
+    <script type='text/javascript' src="{% static 'editor/js/jquery-2.1.4.min.js' %}"></script>
+    <script src="{% static 'editor/js/bootstrap.min.js' %}"></script>
+    <script type="text/javascript">
+      function getCookie(name) {
+        var cookieValue = null;
+        if (document.cookie && document.cookie != '') {
+            var cookies = document.cookie.split(';');
+            for (var i = 0; i < cookies.length; i++) {
+                var cookie = jQuery.trim(cookies[i]);
+                if (cookie.substring(0, name.length + 1) == (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+      }
+    </script>
+    <script type="text/javascript">
+      function accept_mapping(token_text, umls_id, button_group_id) {
+        // send POST request
+        $.ajax({
+          type: "POST",
+          url: "{% url 'decide_umls_jurisdiction' %}",
+          data: {
+            "decision_type": 'accept',
+            "umls_id": umls_id,
+            "token_text": token_text,
+            csrfmiddlewaretoken: getCookie('csrftoken')
+          },
+          success: function(d){
+            $("#a"+button_group_id).toggleClass('btn-success');
+            $("#d"+button_group_id).removeClass('btn-danger');
+            $("#e"+button_group_id).removeClass('btn-primary');
+          },
+        });
+      }
+
+      function deny_mapping(token_text, umls_id, button_group_id) {
+        // send POST request
+        $.ajax({
+          type: "POST",
+          url: "{% url 'decide_umls_jurisdiction' %}",
+          data: {
+            "decision_type": 'deny',
+            "umls_id": JSON.stringify(umls_id),
+            "token_text": token_text,
+            csrfmiddlewaretoken: getCookie('csrftoken')
+          },
+          success: function(d){
+            $("#a"+button_group_id).removeClass('btn-success');
+            $("#d"+button_group_id).toggleClass('btn-danger');
+            $("#e"+button_group_id).removeClass('btn-primary');
+          },
+        });
+      }
+
+      function edit_mapping(token_text, target_text, umls_id, button_group_id, manual_mode) {
+        $("#umls-modal .modal-body").html("<div style='text-align: center'>加载中...</p>")
+        $("#umls-modal").modal("show");
+        if (target_text === ''){
+          $.ajax({
+            type: "POST",
+            url: "{% url 'umls_lookup' %}",
+            data: {
+              "token_text": token_text,
+              csrfmiddlewaretoken: getCookie('csrftoken')
+            },
+            success: function(data) {
+              setup_modal(data, token_text, umls_id, button_group_id, manual_mode);
+            }
+          });  
+        } else {
+          $.ajax({
+            type: "POST",
+            url: "{% url 'umls_lookup_with_translation' %}",
+            data: {
+              "target_text": target_text,
+              csrfmiddlewaretoken: getCookie('csrftoken')
+            },
+            success: function(data) {
+              setup_modal(data, token_text, umls_id, button_group_id, manual_mode);
+            }
+          });
+        }
+      }
+    </script>
+    <script type="text/javascript">
+      function handle_edit_selection(selection_id, manual_mode, previous_umls_id, token_text, button_group_id) {
+        
+        var aui = $("#" + selection_id).data()["AUIData"];
+        var umls_id_json = {AUI: aui, AUIManualMode: manual_mode};
+        var umls_id = JSON.stringify(umls_id_json);
+        $.ajax({
+          type: "POST",
+          url: "{% url 'umls_jurisdiction_edit' %}",
+          data: {
+            "token_text": token_text,
+            "new_umls_id": umls_id,
+            "previous_umls_id": JSON.stringify(previous_umls_id),
+            csrfmiddlewaretoken: getCookie('csrftoken')
+          },
+          success: function(data) {
+            $("#" + selection_id).css("background-color", "#337ab7");
+            $("#umls_id_" + button_group_id).html(JSON.stringify(umls_id_json['AUI']));
+            $("#a"+button_group_id).removeClass('btn-success');
+            $("#d"+button_group_id).removeClass('btn-danger');
+            $("#e"+button_group_id).prop('disabled', true);
+          }
+        });
+      }
+
+      function updateSourceText() {
+        $(".source-text").prop("contenteditable", "true");
+        $(".source-text").focus();
+      }
+
+      function updateTargetText() {
+        $(".target-text").prop("contenteditable", "true");
+        $(".target-text").focus();
+      }
+
+      function setup_modal(data, token_text, umls_id, button_group_id, manual_mode) {
+        var content =
+          "<div class='umls-display-header'>中文原词：</div>" + "\n" +
+          "<div class='source-text'>" + token_text + "</div>" + "\n" +
+          "<button type='button' class='btn btn-default btn-sm' onclick='updateSourceText()'>修正中文词语</button>" + "\n" +
+          "<br/>" + "\n" +
+          "<br/>" + "\n" +
+          "<div class='umls-display-header'>英文翻译：</div>" + "\n";
+        if (data.length === 0) {
+          content += "<div class='target-text'>未找到英文翻译</div>" + "\n";
+        } else {
+          content += "<div class='target-text'>" + data[0] + "</div>" + "\n";
+        }
+        content += "<button type='button' class='btn btn-default btn-sm' onclick='updateTargetText()'>修正英文翻译</button>" + "\n";
+        content +=
+          "<br/>" + "\n" +
+          "<br/>" + "\n" +
+          "<div class='umls-display-header'>UMLS映射：</div>" + "\n";
+
+        content += "<table class='table table-hover' style='cursor: pointer;'><thead><tr><th>CUI</th><th>LUI</th><th>SRT</th></tr></thead><tbody>";
+        for (var i = 0; i < data[1].length; ++i) {
+          var id = "aui" + data[1][i][3];
+          content += "<tr id='"+ id + "'  onclick=\"handle_edit_selection('" + id + "'," + manual_mode + ", " + umls_id + ", '"+ token_text +"', " + button_group_id + ")\">" +
+            "<td>" + data[1][i][0] + "</td><td>" + data[1][i][1] + "</td><td>" + data[1][i][2] + "</td>" +
+            "</tr>";
+        }
+        content += "<tr id='auina' onclick=\"handle_edit_selection('auina', false, " + umls_id + ", '" + token_text + "'," + button_group_id + ")\"><td>没有合适匹配</td><td></td><td></td></tr>";
+        content += "</tbody></table>";
+
+        $("#umls-modal .modal-body").html(content);
+
+
+        lastSourceText = token_text;
+        if (data.length > 0) {
+          lastTargetText = data[0];
+        }
+        for (var i = 0; i < data[1].length; ++i) {
+            var id = "#aui" + data[1][i][3];
+            $(id).data("AUIData", data[1][i])
+        }
+        $("#auina").data("AUIData", ['', '', '', 'na']);
+        $(".source-text").on("focusout", function () {
+          var currentSourceText = $(".source-text").text();
+          if (lastSourceText != currentSourceText) {
+            lastSourceText = currentSourceText;
+            edit_mapping(lastSourceText, "", umls_id, button_group_id, true);
+          }
+        });
+        $(".target-text").on("focusout", function () {
+          var currentTargetText = $(".target-text").text();
+          if (lastTargetText != currentTargetText) {
+            lastTargetText = currentTargetText;
+            edit_mapping(lastSourceText, lastTargetText, umls_id, button_group_id, true);
+          }
+        });
+      }
+    </script>
+  </head>
+  <body>
+
+    <div class="container">
+      <div class="header">
+        <h3 class="text-muted">请对下列映射进行审核</h3>
+      </div>
+      <hr />
+
+      <div class="row">
+        <div class="alert alert-success col-xs-10">用户名 {{ username }}.</div>
+        <div class="col-xs-2 alert alert-danger">
+          <a href="{% url 'logout_ner' %}">登出</a>
+        </div>   
+      </div>
+    </div>
+    <div class="container">
+
+      <div class="row">
+        <div class="col-xs-10">
+          <h4><a href="{% url 'workspace_ner' %}">返回任务列表</a></h4>
+        </div>
+        <div class="col-xs-2">
+          <button type="button" class="btn btn-success btn-md" onclick="submit_jurisdiction();">
+            完成审核
+          </button>
+        </div>
+      </div>
+
+        <table class="table table-striped table-hover">
+        <tr>
+          <td class="col-xs-2">分词内容</td>
+          <td class="col-xs-7">映射UMLS AUI</td>
+          <td class="col-xs-1">映射次数</td>
+          <td class="col-xs-2" align="center">审核决策</td>
+        </tr>
+        {% for token in tokens %}
+          {% if token.umls_id__count > 0 %}
+            <tr>
+              <td class="col-xs-2">{{ token.token_text }}</td>
+              <td class="col-xs-7" id="umls_id_{{ forloop.counter }}">{{ token.umls_id }}</td>
+              <td class="col-xs-1" align="center">{{ token.umls_id__count }}</td>
+              <td class="col-xs-2" align="center"> 
+                <button id="a{{ forloop.counter }}" class="btn btn-sm" onclick='accept_mapping("{{ token.token_text }}", "{{ token.umls_id }}", "{{ forloop.counter }}");'>
+                  接受
+                </button> 
+                <button id="d{{ forloop.counter }}" class="btn btn-sm" onclick='deny_mapping("{{ token.token_text }}", "{{ token.umls_id }}", "{{ forloop.counter }}");'>
+                  拒绝
+                </button>  
+                <button id="e{{ forloop.counter }}"  class="btn btn-sm" 
+                        onclick='edit_mapping("{{ token.token_text }}", "", "{{ token.umls_id }}", "{{ forloop.counter }}", false);'>
+                  修改
+                </button>  
+              </td>
+            </tr>
+          {% endif %}
+        {% endfor %}
+        </table>
+
+        <div id="umls-modal" class="modal fade">
+          <div class="modal-dialog">
+            <div class="modal-content">
+              <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                <h4 class="modal-title">编辑UMLS映射</h4>
+              </div>
+              <div class="modal-body">
+              </div>
+              <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-dismiss="modal">关闭</button>
+              </div>
+            </div><!-- /.modal-content -->
+          </div><!-- /.modal-dialog -->
+        </div><!-- /.modal -->
+
+    </div>
+  </body>
+</html>

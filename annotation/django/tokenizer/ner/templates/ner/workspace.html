@@ -1,0 +1,89 @@
+{% load staticfiles %}
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <link href="{% static 'editor/css/bootstrap.min.css' %}" rel="stylesheet">
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h3 class="text-muted">Welcome</h3>
+      </div>
+      <hr />
+       <div class="row">
+       <!-- Display the current logged in username and the link to logout
+        -->
+      <div class="alert alert-success col-xs-10">user name {{ username }}.</div>
+      <!-- 'url' template tage takes the name of the URL pattern
+           as an argument and renders the URL path. Here it renders
+           the path to the logout URL.
+      -->
+      <div class="col-xs-2 alert alert-danger">
+        <a href="{% url 'logout_ner' %}">log out</a>
+      </div>
+
+      <h4><a href="{% url 'workspace_root' %}">main menu</a></h4>
+
+       </div>
+       </div>
+    </div>
+    <div class="container">
+      <div class="header">
+        <h3 class="text-muted">Progress: {{n_annotation_done}} / {{n_annotation_total}}</h3>
+      </div>
+      <ul class="list-group">
+        <li class="list-group-item">FILES TO ANNOTATE</li>
+          <ul class="list-group">
+          {% for file in fileset_annotate %}
+            <li class="list-group-item">
+              <div class="row">
+                <div class="col-xs-3"><p>{{file.file_name }}</p> </div>
+                {% if file.umls_state == 'NOT_READY' and file.annotation_state == 'IN_PROGRESS' %}
+                  <div class="col-xs-2">TODO</div>
+                {% elif file.annotation_state == 'DONE' %}
+                  <div class="col-xs-2">DONE</div>
+                {% else %}
+                  <div class="col-xs-2">DOING</div>
+                {% endif %}
+                {% if file.umls_state == 'NOT_READY' %}
+                  <div class="col-xs-2"><a href="{% url 'annotate_text' file.id %}" >start</a></div>
+                {% else %}
+                  <div class="col-xs-2"><a href="{% url 'map_umls_terms' file.id %}" >start</a></div>
+                {% endif %}
+              </div>
+            </li>
+          {% endfor %}
+          </ul>
+<!-- 
+
+        <li class="list-group-item">需审核的分类结果</li>
+          <ul class="list-group">
+            {% for file in fileset_adjudicate %}
+              {% if file.jurisdiction_state == 'IN_PROGRESS' %}
+                <li class="list-group-item">
+                  <div class="row">
+                    <div class="col-xs-3"><p>{{file.file_name }}</p> </div>
+                    <div class="col-xs-2"><a href="{% url 'annotation_jurisdiction' file.id %}" >开始审核</a></div>
+                  </div>
+                </li>
+              {% endif %}
+            {% endfor %}
+          </ul>
+ -->
+
+<!-- 
+        {% if is_adjudicator %}
+          <li class="list-group-item">审核UMLS映射</li>
+            <ul class="list-group">
+              <li class="list-group-item">
+                <div class="row">
+                  <div class="col-xs-2"><a href="{% url 'umls_jurisdiction' %}" >开始审核</a></div>
+                </div>
+              </li>
+            </ul>
+        {% endif %}
+ -->
+      </ul>
+    </div>
+  </body>
+</html>

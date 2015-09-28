@@ -1,0 +1,7 @@
+Setup
+1. Install node [https://nodejs.org/]
+2. Install npm [https://www.npmjs.com/]
+3. npm install
+4. [in one terminal] npm run start
+5. [in another terminal] node app.js
+6. Open browser and hit http://localhost:3000

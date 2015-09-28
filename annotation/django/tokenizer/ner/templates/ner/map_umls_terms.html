@@ -1,0 +1,354 @@
+{% extends "ner/ner_base.html" %}
+
+{% block style %}
+<style type="text/css">
+.token {
+  background-color: transparent;
+  float: left;
+  cursor: default;
+}
+.non-clickable {
+  cursor: default;
+}
+.not-umls-mapped {
+  color: white;
+  background-color: #d9534f;
+}
+.umls-mapped {
+  color: white;
+  background-color: #337ab7;
+}
+.token.not-umls-mapped {
+  cursor: pointer;
+}
+.token.umls-mapped {
+  cursor: pointer;
+}
+.umls-display-header {
+  font-size: 16px;
+  font-weight: bold;
+}
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script type="text/javascript">
+  var lastSourceText = '';
+  var lastTargetText = '';
+  function handleTokenForUmlsMappingSelection(token_text, selection, selected, manual_mode) {
+    {% for result_item in result_set %}
+      if ("{{ result_item.token_text }}" === token_text) {
+        if (!selected) {
+          for(var i = {{result_item.start_position}}; i <= {{result_item.end_position}}; ++i) {
+            var div_id = "#token" + i;
+            $(div_id).removeData();
+            $(div_id).removeClass("umls-mapped");
+            $(div_id).addClass("not-umls-mapped");
+          }
+        } else {
+          for(var i = {{result_item.start_position}}; i <= {{result_item.end_position}}; ++i) {
+            var div_id = "#token" + i;
+            $(div_id).data("AUI", selection);
+            $(div_id).data("AUIManualMode", manual_mode);
+            $(div_id).removeClass("not-umls-mapped");
+            $(div_id).addClass("umls-mapped");
+          }
+        }
+      }
+    {% endfor %}
+  }
+  function handleModalForUmlsMappingSelection(startIndex, endIndex, selection_id, manual_mode) {
+    var selection = $("#" + selection_id).data()["AUIData"];
+    var token_text = '';
+    for(var i = startIndex; i <= endIndex; ++i) {
+      token_text += $("#token" + i).text();
+    }
+    var selectionData = $("#token"+startIndex).data();
+    if (selectionData.hasOwnProperty("AUI")) {
+      var previousSelection = selectionData["AUI"];
+    }
+    if (previousSelection && previousSelection[3] === selection[3]) {
+      handleTokenForUmlsMappingSelection(token_text, selection, false, manual_mode);
+      $("table tr").css("background-color", "")
+    } else {
+      handleTokenForUmlsMappingSelection(token_text, selection, true, manual_mode);
+      $("table tr").css("background-color", "");
+      $("table tr#aui"+selection[3]).css("background-color", "#337ab7");
+    }
+  }
+  function updateSourceText() {
+    $(".source-text").prop("contenteditable", "true");
+    $(".source-text").focus();
+  }
+  function updateTargetText() {
+    $(".target-text").prop("contenteditable", "true");
+    $(".target-text").focus();
+  }
+  function setup_modal(data, startIndex, endIndex, token_text, manual_mode) {
+    var selectionData = $("#token"+startIndex).data();
+    if (selectionData.hasOwnProperty("AUI")) {
+      var selection = selectionData["AUI"];
+    }
+    var content =
+      "<div class='umls-display-header'>中文原词：</div>" + "\n" +
+      "<div class='source-text'>" + token_text + "</div>" + "\n" +
+      "<button type='button' class='btn btn-default btn-sm' onclick='updateSourceText()'>修正中文词语</button>" + "\n" +
+      "<br/>" + "\n" +
+      "<br/>" + "\n" +
+      "<div class='umls-display-header'>英文翻译：</div>" + "\n";
+    if (data.length === 0) {
+      content += "<div class='target-text'>未找到英文翻译</div>" + "\n";
+    } else {
+      content += "<div class='target-text'>" + data[0] + "</div>" + "\n";
+    }
+    content += "<button type='button' class='btn btn-default btn-sm' onclick='updateTargetText()'>修正英文翻译</button>" + "\n";
+    content +=
+      "<br/>" + "\n" +
+      "<br/>" + "\n" +
+      "<div class='umls-display-header'>UMLS映射：</div>" + "\n";
+
+    content += "<table class='table table-hover' style='cursor: pointer;'><thead><tr><th>CUI</th><th>LUI</th><th>SRT</th></tr></thead><tbody>";
+    for (var i = 0; i < data[1].length; ++i) {
+      var id = "aui" + data[1][i][3];
+      content += "<tr id='" + id + "' onclick=\"handleModalForUmlsMappingSelection(" + startIndex + ", " + endIndex + ", '" + id + "', " + manual_mode + ")\">" +
+        "<td>" + data[1][i][0] + "</td><td>" + data[1][i][1] + "</td><td>" + data[1][i][2] + "</td>" +
+        "</tr>";
+    }
+    content += "<tr id='auina' onclick=\"handleModalForUmlsMappingSelection(" + startIndex + ", " + endIndex + ", 'auina', false)\"><td>没有合适匹配</td><td></td><td></td></tr>";
+    if (selectionData.hasOwnProperty("AUIManualMode") && selectionData["AUIManualMode"]) {
+      var id = "aui" + selectionData["AUI"][3];
+      content += "<tr id='" + id + "' onclick=\"handleModalForUmlsMappingSelection(" + startIndex + ", " + endIndex + ", '" + id + ", " + manual_mode + "')\">" +
+        "<td>" + selectionData["AUI"][0] + "</td><td>" + selectionData["AUI"][1] + "</td><td>" + selectionData["AUI"][2] + "</td>" +
+        "</tr>";
+    }
+    content += "</tbody></table>";
+
+    $("#umls-modal .modal-body").html(content);
+    if (selection) {
+      $("table tr#aui"+selection[3]).css("background-color", "#337ab7");
+    }
+
+    lastSourceText = token_text;
+    if (data.length > 0) {
+      lastTargetText = data[0];
+    }
+    for (var i = 0; i < data[1].length; ++i) {
+        var id = "#aui" + data[1][i][3];
+        $(id).data("AUIData", data[1][i])
+    }
+    $("#auina").data("AUIData", ['', '', '', 'na']);
+    $(".source-text").on("focusout", function () {
+      var currentSourceText = $(".source-text").text();
+      if (lastSourceText != currentSourceText) {
+        lastSourceText = currentSourceText;
+        handleTokenClick(startIndex, endIndex, lastSourceText, "", true)();
+      }
+    });
+    $(".source-text").keydown(function(e) {
+      if (e.which === 13) {
+        $(".source-text").blur();
+      }
+    });
+    $(".target-text").on("focusout", function () {
+      var currentTargetText = $(".target-text").text();
+      if (lastTargetText != currentTargetText) {
+        lastTargetText = currentTargetText;
+        handleTokenClick(startIndex, endIndex, lastSourceText, lastTargetText, true)();
+      }
+    });
+    $(".target-text").keydown(function(e) {
+      if (e.which === 13) {
+        $(".target-text").blur();
+      }
+    });
+  }
+  function handleTokenClick(startIndex, endIndex, token_text, target_text, manual_mode) {
+    return function() {
+      $("#umls-modal .modal-body").html("<div style='text-align: center'>加载中...</p>")
+      $("#umls-modal").modal("show");
+      if (target_text.length === 0) {
+        if (token_text in umlsLookupResults) {
+          setup_modal(umlsLookupResults[token_text], startIndex, endIndex, token_text, manual_mode);
+        } else {
+          $.ajax({
+            type: "POST",
+            url: "{% url 'umls_lookup' %}",
+            data: {
+              token_text: token_text,
+              csrfmiddlewaretoken: getCookie('csrftoken')
+            },
+            success: function(data) {
+              umlsLookupResults[token_text] = data;
+              setup_modal(data, startIndex, endIndex, token_text, manual_mode);
+            }
+          });
+        }
+      } else {
+        $.ajax({
+          type: "POST",
+          url: "{% url 'umls_lookup_with_translation' %}",
+          data: {
+            target_text: target_text,
+            csrfmiddlewaretoken: getCookie('csrftoken')
+          },
+          success: function(data) {
+            setup_modal(data, startIndex, endIndex, token_text, manual_mode);
+          }
+        });
+      }
+    }
+  }
+  function loadUmlsMappings() {
+    {% for result_item in result_set %}
+      var startIndex = {{result_item.start_position}};
+      var endIndex = {{result_item.end_position}};
+      for(var i = startIndex; i <= endIndex; ++i) {
+        var div_id = "#token"+i;
+        {% autoescape off %}
+        if (('{{ result_item.umls_id }}'.length > 0 && '{{ result_item.umls_id }}' != '""') || '{{ result_item.umls_id }}' === 'na') {
+          var selection = JSON.parse('{{ result_item.umls_id }}');
+          $(div_id).data("AUI", selection["AUI"]);
+          $(div_id).data("AUIManualMode", selection["AUIManualMode"]);
+          $(div_id).addClass("umls-mapped");
+        } else {
+          $(div_id).addClass("not-umls-mapped");
+        }
+        {% endautoescape %}
+        $(div_id).click(handleTokenClick(startIndex, endIndex, "{{ result_item.token_text }}", "", false));
+      }
+    {% endfor %}
+  }
+</script>
+
+<script type="text/javascript">
+  var umlsLookupResults = {}
+  function preloadUmlsLookupResults() {
+    {% autoescape off %}
+    {% for item in preloaded_umls_lookup_results %}
+      umlsLookupResults["{{item.source}}"] = JSON.parse('{{item.result}}');
+    {% endfor %}
+    {% endautoescape %}
+  }
+</script>
+
+<script type="text/javascript">
+  function umls_mapping_data(start_position, end_position, token_text) {
+    var div_id = "#token"+start_position;
+    var selectionData = $(div_id).data();
+    if (selectionData.hasOwnProperty("AUI")) {
+      var selection = {
+        AUI: selectionData["AUI"],
+        AUIManualMode: selectionData["AUIManualMode"]
+      };
+    } else {
+      var selection = '';
+    }
+    return {
+      text: token_text,
+      umls_id: JSON.stringify(selection),
+      start_position: start_position,
+      end_position: end_position
+    }
+  }
+  function save_umls_mapping(callback) {
+    var results = [];
+    {% for result_item in result_set %}
+      results.push(umls_mapping_data('{{ result_item.start_position }}', '{{ result_item.end_position }}', '{{ result_item.token_text }}'));
+    {% endfor %}
+    // send POST request
+    $.ajax({
+      type: "POST",
+      url: "{% url 'save_umls_mapping' %}",
+      data: {
+        file_name: "{{ file_name }}",
+        results: JSON.stringify(results),
+        comment_text: $("#comment_text").text(),
+        csrfmiddlewaretoken: getCookie('csrftoken')
+      },
+      success: function(d){
+        //alert('成功保存');
+        if (callback) {
+          callback();
+        }
+      },
+    });
+  }
+</script>
+
+<script type="text/javascript">
+  function submit_umls_mapping() {
+    save_umls_mapping(function() {
+      var file_state = "{{ file_state }}";
+      if (file_state === "DONE") {
+        return;
+      }
+      // send POST request
+      $.ajax({
+        type: "POST",
+        url: "{% url 'submit_umls_mapping' %}",
+        data: {
+          "file_name": "{{ file_name }}",
+          "file_id": "{{ file_id }}",
+          csrfmiddlewaretoken: getCookie('csrftoken')
+        },
+        success: function(d){
+          alert('成功提交');
+        },
+      });
+    });
+  }
+</script>
+{% endblock %}
+
+{% block body-initializations %}
+loadUmlsMappings(); preloadUmlsLookupResults();
+{% endblock %}
+
+{% block buttons %}
+{% if file_state != "DONE" %}
+  <div class="col-xs-1">
+    <button type="button" class="btn btn-primary btn-md" onclick='save_umls_mapping(function() {alert("成功保存");});'>
+      保存
+    </button>
+  </div>
+  <div class="col-xs-1">
+    <button type="button" class="btn btn-danger btn-md" onclick="submit_umls_mapping();">
+      提交
+    </button>
+  </div>
+  {% else %}
+  <div class="col-xs-1">
+    <button type="button" class="btn btn-gray btn-md">
+       已保存
+    </button>
+  </div>
+  {% endif %}
+  <div class="col-xs-1">
+    <button type="button" class="btn btn-success btn-md" onclick='save_umls_mapping(function() {window.location.href = "{{annotation_url}}";});'>
+      上一步
+    </button>
+  </div>
+{% endblock %}
+
+{% block labels %}
+<button class="btn btn-md non-clickable umls-mapped">已映射</button>
+<button class="btn btn-md non-clickable not-umls-mapped">未映射</button>
+{% endblock %}
+
+{% block extra-body %}
+<div id="umls-modal" class="modal fade">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+        <h4 class="modal-title">UMLS映射</h4>
+      </div>
+      <div class="modal-body">
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-default" data-dismiss="modal">关闭</button>
+      </div>
+    </div><!-- /.modal-content -->
+  </div><!-- /.modal-dialog -->
+</div><!-- /.modal -->
+{% endblock %}

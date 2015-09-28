@@ -1,0 +1,86 @@
+{% load staticfiles %}
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <link href="{% static 'editor/css/bootstrap.min.css' %}" rel="stylesheet">
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h3 class="text-muted">Welcome</h3>
+      </div>
+      <hr />
+       <div class="row">
+       <!-- Display the current logged in username and the link to logout
+        -->
+      <div class="alert alert-success col-xs-10">用户名 {{ username }}.</div>
+      <!-- 'url' template tage takes the name of the URL pattern
+           as an argument and renders the URL path. Here it renders
+           the path to the logout URL.
+      -->
+      <div class="col-xs-2 alert alert-danger">
+        <a href="{% url 'logout_editor' %}">登出</a>
+      </div>
+
+      <h4><a href="{% url 'workspace_root' %}">返回任务选择菜单</a></h4>
+         
+       </div>
+       </div>
+    </div>
+    <div class="container">
+      <div class="header">
+        <h3 class="text-muted">任务列表 [标注进度: {{n_annotation_done}} / {{n_annotation_total}}, 审核进度: {{n_adjudication_done}} / {{n_adjudication_total}}]</h3>
+      </div>
+      <ul class="list-group">
+        <li class="list-group-item">需分词处理的文件</li>
+          <ul class="list-group">
+
+          {% for file in fileset1 %}
+            <li class="list-group-item">
+              <div class="row">
+                <div class="col-xs-3"><p>{{file.file_name }}</p> </div>
+                {% if file.first_worker_state.id == 2 %}
+                    <div class="col-xs-2">未开始:(</div>
+                {% elif file.first_worker_state.id == 3 %}
+                    <div class="col-xs-2">已完成:)</div>
+                {% elif file.first_worker_state.id == 4 %}
+                    <div class="col-xs-2">进行中...</div>
+                {% endif %}
+                <div class="col-xs-2"><a href="{% url 'tokenize_text' file.id 1 %}" >开始标注</a></div>
+              </div>
+            </li>
+          {% endfor %}
+
+          {% for file in fileset2 %}
+            <li class="list-group-item">
+              <div class="row">
+                <div class="col-xs-3"><p>{{file.file_name }}</p> </div>
+                {% if file.second_worker_state.id == 2 %}
+                    <div class="col-xs-2">未开始:(</div>
+                {% elif file.second_worker_state.id == 3 %}
+                    <div class="col-xs-2">已完成:)</div>
+                {% elif file.second_worker_state.id == 4 %}
+                    <div class="col-xs-2">进行中...</div>
+                {% endif %}
+                <div class="col-xs-2"><a href="{% url 'tokenize_text' file.id 2 %}" >开始标注</a></div>
+              </div>
+            </li>
+          {% endfor %}
+
+          </ul>
+        <!-- Reserved for later
+        <li class="list-group-item">Files to annotate:</li>
+        -->
+        <li class="list-group-item">需审核的文件</li>
+          {% for file in files_to_judge %}
+            <li class="list-group-item">
+              <div class="row">
+                <div class="col-xs-3"><p>{{file.file_name }}</p> </div>
+                <div class="col-xs-2"><a href="{% url 'jurisdiction' file.id %}" >开始审核</a></div>
+              </div>
+            </li>
+          {% endfor %}        
+      </ul>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,206 @@
+{% load staticfiles %}
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <link href="{% static 'editor/css/bootstrap.min.css' %}" rel="stylesheet">
+    <style type="text/css">
+      .sticky {
+        position: fixed;
+        top: 0;
+      }
+      .spacer {
+        margin-top: 40px; /* define margin as you see fit */
+      }
+      .btn-gray {
+        background-color: #777;
+        cursor: default;
+      }
+      .tokengroup {
+        display:inline-block;
+        font-size: 20px;
+        cursor: pointer;
+        padding-left: 4px;
+        padding-right: 4px;
+      }
+    </style>
+    {% block style %}
+    {% endblock %}
+    <script type='text/javascript' src="{% static 'editor/js/jquery-2.1.4.min.js' %}"></script>
+    <script src="{% static 'editor/js/bootstrap.min.js' %}"></script>
+    <script type="text/javascript">
+      function getCookie(name) {
+        var cookieValue = null;
+        if (document.cookie && document.cookie != '') {
+            var cookies = document.cookie.split(';');
+            for (var i = 0; i < cookies.length; i++) {
+                var cookie = jQuery.trim(cookies[i]);
+                if (cookie.substring(0, name.length + 1) == (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+    </script>
+
+    <script type="text/javascript">
+      function hashCode(str) { // java String#hashCode
+       var hash = 0;
+       for (var i = 0; i < str.length; i++) {
+           hash = str.charCodeAt(i) + ((hash << 5) - hash);
+       }
+       return hash;
+      } 
+
+      function intToRGB(i){
+        var c = (i & 0x00FFFFFF)
+          .toString(16)
+          .toUpperCase();
+        return "00000".substring(0, 6 - c.length) + c;
+      }
+
+      function guid() {
+        function s4() {
+          return Math.floor((1 + Math.random()) * 0x10000)
+            .toString(16)
+            .substring(1);
+        }
+        return s4() + s4() + '-' + s4() + '-' + s4() + '-' +
+          s4() + '-' + s4() + s4() + s4();
+      }
+    </script>
+
+    <script type="text/javascript">
+      var totalNumTokens = 0;
+
+      function prepareDivContainer() {
+        // remove extra spaces
+        var str = $("#main_text").text();//.replace(/[\s]+/g, ' ');
+
+        var tokens = [];
+        // split into lines first
+        var lines = str.split('\n');
+        for(var i = 0; i < lines.length; ++i) {
+          if (i > 0) {
+            // each line is separted by '\n'
+            tokens.push('\n');
+          }
+          if (lines[i].length === 0) {
+            // there might be extra '\n', which results in '' after split by '\n'
+            tokens.push('\n');
+          } else {
+            // push tokens of one line into `tokens`
+            var punctuations = [
+              ' ',
+              '，',
+              ',',
+              '。',
+              '、',
+              '：',
+              ':',
+              '？',
+              '?'
+            ];
+            var token = '';
+            for(var j = 0; j < lines[i].length; ++j) {
+              if (punctuations.indexOf(lines[i][j]) === -1) {
+                token += lines[i][j];
+              } else {
+                tokens.push(token);
+                token = '';
+                tokens.push(lines[i][j]);
+              }
+            }
+            if (token != '') {
+              tokens.push(token);
+            }
+          }
+        }
+
+        // clear the content of the editable div
+        $("#main_text").text('');
+
+        // insert each word wrapped with a div
+        for (var i = 0; i < tokens.length; i++)
+        {
+          if (tokens[i] === '\n') {
+            $("#main_text").append("<br>");
+          } else {
+            var content = '<div id="tokengroup'+i+'" class="tokengroup">';
+            for (var j = 0; j < tokens[i].length; ++j) {
+              totalNumTokens += 1;
+              content += '<div id="token' + totalNumTokens + '" class="token">' + tokens[i][j] + '</div>';
+            }
+            content += '</div>';
+            $("#main_text").append(content);
+          }
+        }
+        console.log("finish inserting");
+     }
+    </script>
+
+    <script type="text/javascript">
+      function makeLabelsSticky() {
+        var $window = $(window),
+          $stickyEl = $('#label_controller'),
+          elTop = $stickyEl.offset().top;
+
+          $window.scroll(function() {
+          $stickyEl.toggleClass('sticky', $window.scrollTop() > elTop);
+        });
+      }
+    </script>
+
+    {% block scripts %}
+    {% endblock %}
+  </head>
+  <body onload="prepareDivContainer(); makeLabelsSticky(); {% block body-initializations %}{% endblock %}">
+
+    <div class="container">
+      <div class="header">
+        <h3 class="text-muted">Please annotate following documents</h3>
+      </div>
+      <hr />
+
+      <div class="row">
+        <div class="alert alert-success col-xs-10">user name {{ username }}.</div>
+        <div class="col-xs-2 alert alert-danger">
+          <a href="{% url 'logout_ner' %}">log out</a>
+        </div>
+      </div>
+    </div>
+    <div class="container">
+
+      <div class="row">
+        <div class="col-xs-5">
+          <h4><a href="{% url 'workspace_ner' %}">Go back to file list</a></h4>
+          <h4><a href="{{prev_file_url}}">Previous file</a></h4>
+          <h4><a href="{{next_file_url}}">Next file</a></h4>
+        </div>
+        <div class="col-xs-4">
+          <h4>{{ file_name }}</h4>
+        </div>
+
+        {% block buttons %}
+        {% endblock %}
+      </div>
+      
+      <div class="jumbotron">
+        <div id="label_controller">
+          <div class="btn-group-horizontal">
+              {% block labels %}
+              {% endblock %}
+          </div>
+        </div>
+        <div class="spacer"></div>
+        <div id="main_text">{{ file_content }}</div>
+      </div>
+
+      <textarea id="comment_text" rows="6" style="width: 100%;">{{ annotation_comment }}</textarea>
+
+      {% block extra-body %}
+      {% endblock %}
+    </div>
+  </body>
+</html>

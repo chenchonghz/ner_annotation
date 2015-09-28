@@ -1,0 +1,142 @@
+{% load staticfiles %}
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <link href="{% static 'editor/css/bootstrap.min.css' %}" rel="stylesheet">
+    <script src="{% static 'editor/js/tinymce/tinymce.min.js' %}"></script>
+    <script type='text/javascript' src="{% static 'editor/js/jquery-2.1.4.min.js' %}"></script>
+
+    <script type="text/javascript" src="{% static 'editor/js/mergely/codemirror.js' %}"></script>
+    <link type="text/css" rel="stylesheet" href="{% static 'editor/js/mergely/codemirror.css' %}" />
+
+    <script type="text/javascript" src="{% static 'editor/js/mergely/mergely.js' %}"></script>
+    <link type="text/css" rel="stylesheet" href="{% static 'editor/js/mergely/mergely.css' %}" />
+
+    <script type="text/javascript">
+      function getCookie(name) {
+        var cookieValue = null;
+        if (document.cookie && document.cookie != '') {
+            var cookies = document.cookie.split(';');
+            for (var i = 0; i < cookies.length; i++) {
+                var cookie = jQuery.trim(cookies[i]);
+                // Does this cookie string begin with the name we want?
+                if (cookie.substring(0, name.length + 1) == (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+    </script>
+    <script type="text/javascript">
+    $(document).ready(function () {
+      $('#compare').mergely({
+        width: 'auto',
+        height: 500,
+        //ignorews: true,
+        cmsettings: { 
+          readOnly: false, 
+          lineWrapping: true,
+        },
+        lhs: function(setValue) {
+          setValue('{{ text_content1 }}');
+        },
+        rhs: function(setValue) {
+          setValue('{{ text_content2 }}');
+        }
+      });
+    });
+    </script>
+    <script type="text/javascript">
+      tinymce.init({
+        //content_css: "{% static 'editor/custom_content.css' %}",
+        mode: "textareas", 
+        editor_selector: "edit",
+        plugins: "save",
+        toolbar: "save",
+        save_enablewhendirty: true,
+        height: 500,
+        save_onsavecallback: function() {save_text();}
+      });
+    </script>
+    <script type="text/javascript">
+      function save_text() {
+        var text_box = document.getElementById("main_text");
+        var content = text_box.value;
+        $.ajax({
+          type: "POST",
+          url: "{% url 'save_tokenized' %}",
+          data: {file_name: "{{ title }}",
+                 file_copy: "{{ file_copy }}",
+                 text_content: content,
+                 csrfmiddlewaretoken: getCookie('csrftoken')},
+        });
+      }
+    </script>
+    <script type="text/javascript">
+      function submit_text() {
+        // make sure the text is saved.
+        tinymce.triggerSave();
+        save_text();
+        $.ajax({
+          type: "POST",
+          url: "{% url 'submit_tokenized' %}",
+          data: {file_name: "{{ title }}",
+                 file_copy: "{{ file_copy }}",
+                 csrfmiddlewaretoken: getCookie('csrftoken')},
+        });
+        alert("Submitted! The file will no longer appear in your to do list the next time you login.")
+      }
+    </script>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h3 class="text-muted">请对以下文件进行审核</h3>
+      </div>
+      <hr />
+      <div class="row">
+        <div class="alert alert-success col-xs-10">用户名 {{ username }}.</div>
+        <div class="col-xs-2 alert alert-danger">
+          <a href="{% url 'logout_editor' %}">登出</a>
+        </div>   
+      </div>
+    </div>
+
+    <div class="container">
+      <div class="row">
+        <div class="col-xs-2">
+          <h4><a href="{% url 'workspace_editor' %}">返回任务列表</a></h4>
+          <h4><a href="{{prev_file_url}}">上一份文件</a></h4>
+          <h4><a href="{{next_file_url}}">下一份文件</a></h4>
+        </div>
+        <div class="col-xs-2">
+          <h4>{{ title }}</h4>
+        </div>
+        <div class="col-xs-3">
+          <button type="button" class="btn btn-primary btn-md" onclick='window.open("/editor/instruction/");'>
+            查看详细说明！
+          </button>
+        </div>
+        <div>
+          <button type="button" class="btn btn-danger btn-md" onclick="submit_text();">
+            提交！
+          </button>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col-xs-6">
+          <p>1号标注者: <strong>{{annotator1}}</strong></p>
+          <p><mark>留言: {{ comment1 }} </mark></p>
+        </div>
+        <div class="col-xs-6">
+          <p>2号标注者: <strong>{{annotator2}}</strong></p>
+          <p><mark>留言: {{ comment2 }} </mark></p>
+        </div>
+      </div>
+      <div id="compare"></div>
+      <textarea id="main_text" class="edit"><font size="3">{{ initial_final_text }}</font></textarea>
+    </div>
+  </body>
+</html>

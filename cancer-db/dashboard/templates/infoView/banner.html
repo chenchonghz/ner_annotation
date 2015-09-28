@@ -1,0 +1,19 @@
+{%if banner.0%}
+  <div id='banner' style='margin-top:10px;' class="alert alert-{{banner.0}} alert-dismissable">
+    <button type="button" class="close" data-dismiss="alert" aria-hidden="true">&times;</button>
+    {%if banner.0 == 'danger' %}
+    <h4><i class="icon fa fa-ban"></i> {{banner.1}}</h4>
+    {%elif banner.0 == 'info' %}
+    <h4><i class="icon fa fa-info"></i> {{banner.1}}</h4>
+    {%elif banner.0 == 'warning' %}
+    <h4><i class="icon fa fa-warning"></i> {{banner.1}}</h4>
+    {%elif banner.0 == 'success' %}
+    <h4><i class="icon fa fa-check"></i> {{banner.1}}</h4>
+    {%else%}
+    <h4>{{banner.1}}</h4>
+    {%endif%}
+
+    {{banner.2}}
+  </div>
+
+{%endif%}

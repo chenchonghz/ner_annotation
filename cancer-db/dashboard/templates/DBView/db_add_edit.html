@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+{% extends "base.html" %}
+{% load staticfiles %}
+
+{%block script %}
+    <title>MMS | Edit Information: {{ntid}}</title>
+
+
+    <link href="{% static "css/dj.selectable.css" %}" type="text/css" media="all" rel="stylesheet">
+
+    <script src="{% static "js/jquery.formset.js" %}"></script>
+
+    
+    <script type="text/javascript">
+    //datapicker
+    $(function() {
+    $( ".datepicker" ).datepicker({
+      changeMonth: true,
+      changeYear: true,
+      yearRange: "2000:2050",
+      // You can put more options here.
+
+      });
+    });
+    </script>
+
+    <link rel="stylesheet" href="{% static "css/new-form.css" %}" />
+
+
+{% endblock %}
+{% block content %}
+<body>
+
+<div class="content-wrapper">
+
+{% include "infoView/banner.html"%}
+
+<ul class="breadcrumb">
+  <li><a href="/">主页</a></li>
+  <li><a href="/dashboard/db/{{db_name}}">数据库</a></li>
+  {%if object_id%}
+  <li><a href="/dashboard/get/{{object_id}}">{{curr_patient.name}}的详细信息</a></li>
+  {%endif%}
+  <li class="active">{{title}}</li>
+</ul>
+
+
+  <form action="." method="post">
+  {% csrf_token %}
+  	    
+  <div class="form-style-10" style='width:70%'>
+    <h1>{{title}}<span></span></h1>
+    <div class="section"><span>1</span>病人：{{curr_patient.name}}</div>
+    {{ targetForm.non_field_errors }}  
+    <div class="inner-wrap">
+    {{targetForm.as_p}}
+    </div>
+
+    <div class="button-section" align="center">
+  	 <hr>
+  	 <input type='submit' name='cancel'class="submit" value="取消" style="position:relative;margin-right: 50px;"/>
+  	 <input type="submit" name='submit' value="保存" class="submit" />
+    </div>
+  </div>
+
+  </form>
+
+</div>
+
+</body>
+<script type="text/javascript" src="{% static "js/jquery.dj.selectable.js" %}"></script>
+
+{% endblock %}
+</html>
+
+

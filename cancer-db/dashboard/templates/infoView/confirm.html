@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+{% extends "base.html" %}
+<html>
+
+{% block script%}
+<script>
+function goBack() {
+    window.history.back();
+}
+</script>
+{%endblock%}
+
+{%block content%}
+<div class="content-wrapper">
+	<hr>
+	<div class="callout callout-{{head}}">
+	  <button type="button" class="close" data-dismiss="alert">×</button>
+	  <h4>{{title}}</h4>
+	  <p>{{content}}</p>
+	</div>
+
+	<div style="position:relative;text-align:center;">
+	<br>
+
+	{{buttons|safe}}
+
+	</div>
+	<br>
+</div>
+{%endblock%}
+</html>

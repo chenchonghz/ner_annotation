@@ -1,0 +1,6 @@
+venv/
+db.sqlite3
+
+# Exceptions
+# temporary adding AdminLTE dist
+!dashboard/static/AdminLTE/dist/

@@ -1,0 +1,1204 @@
+<!DOCTYPE HTML>
+{% extends "base.html" %}
+{% load staticfiles %}
+{%block script%}
+<script src="{% static "js/jquery.dataTables.js" %}"></script>
+<link rel="stylesheet" href="{% static "css/jquery.dataTables.css" %}" />
+
+<link rel="stylesheet" href="{% static "timeline/css/timeline-reset.css"%}"/> <!-- CSS reset -->
+<link rel="stylesheet" href="{% static "timeline/css/timeline-style.css"%}"/> <!-- Resource style -->
+
+<script src="{% static "timeline/js/timeline-modernizr.js" %}"></script> <!-- Modernizr -->
+<script src="{% static "timeline/js/timeline-main.js" %}"></script> <!-- Resource jQuery -->
+
+
+<style>
+  div.dataTables_filter {
+      text-align: left;
+  }
+  .col-sm-6 {
+      width: 20%;
+  }
+  .filterMatches { background-color: #FFFF00; }
+  /*http://jsfiddle.net/UNs9J/1/*/
+  span1{
+    overflow: auto;
+    background:#F8F8F8;
+    border: 5px solid #DFDFDF;
+    color: #717171;
+    font-size: 13px;
+    height: 200px;
+    letter-spacing: 1px;
+    line-height: 30px;
+    position: relative;
+    text-align: center;
+    text-transform: uppercase;
+    top: 10px;
+    left:0px;
+    display:none;
+    padding:0 20px;
+    
+  }
+
+  a:hover span1{
+      display:block;
+  }
+
+  .marked-icon {
+    color : orange;
+  }
+  </style>
+
+
+  <script>
+    function getCookie(name) {
+        var cookieValue = null;
+        if (document.cookie && document.cookie != '') {
+            var cookies = document.cookie.split(';');
+            for (var i = 0; i < cookies.length; i++) {
+                var cookie = jQuery.trim(cookies[i]);
+                // Does this cookie string begin with the name we want?
+                if (cookie.substring(0, name.length + 1) == (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
+    $.extend( $.fn.DataTable.defaults, {
+        "searching": true,
+        "ordering": true
+    } );
+
+    $(document).ready(function() {
+        //hide empty columns
+        $('#recent tr th').each(function(i) {
+         //select all tds in this column
+         var tds = $(this).parents('table')
+                  .find('tr td:nth-child(' + (i + 1) + ')');
+            //check if all the cells in this column are empty
+            if(tds.length == tds.filter(':empty').length) { 
+                //hide header
+                $(this).hide();
+                //hide cells
+                tds.hide();
+            } 
+        });
+
+        var table = $('#recent').DataTable( {
+            //highlight search text, CHECK
+            "fnRowCallback": function( nRow, aData, iDisplayIndex, iDisplayIndexFull) {
+                var settings = this.fnSettings();
+                var str = settings.oPreviousSearch.sSearch;
+                var regex = new RegExp( str, 'i');
+                $('td', nRow).each( function(i) {
+                    this.innerHTML = aData[i].replace( regex, function(matched) { return "<span class='filterMatches'>"+matched+"</span>";});
+                });
+                return nRow;
+            },
+            "language": {
+                "url": "//cdn.datatables.net/plug-ins/1.10.8/i18n/Chinese.json"
+            },
+            "scrollX": "200%",
+            "scrollY": 450,
+            "pageLength": 100,
+            "bAutoWidth": true ,
+            "fixedHeader": true,
+            "order": [[ 0, "desc" ]],
+
+            "columnDefs": [
+                {
+                    // The `data` parameter refers to the data for the cell (defined by the
+                    // `data` option, which defaults to the column being worked with, in
+                    // this case `data: 0`.
+            className: "dt-center",
+            "render": function ( data, type, row ) {
+                        return data;
+                    },
+                    "targets": "_all"//[0,1,2,3,4,5]
+                },
+                { "visible": false,  "targets": [ ] }
+            ]
+        } );
+
+        // var HIDDEN_COLUMN_INDEX = 2;
+
+        // table.on('search', function () {
+        //     if (table.search().length) {
+        //         table.column(HIDDEN_COLUMN_INDEX).visible(true);
+        //     } else {
+        //         table.column(HIDDEN_COLUMN_INDEX).visible(false);
+        //     }
+        // });
+
+        // table.column(HIDDEN_COLUMN_INDEX).visible(false);
+
+        $('#download-csv').click(function() {
+            var filtered = table.rows({filter:'applied'})[0];
+            $.ajax({
+                method: 'POST',
+                url: 'download',
+                data: {
+                    indexes: filtered,
+                    csrfmiddlewaretoken: getCookie('csrftoken'),
+                },
+                success: function(response, status, xhr) {
+                    // check for a filename
+                    var filename = '';
+                    var disposition = xhr.getResponseHeader('Content-Disposition');
+                    if (disposition && disposition.indexOf('attachment') !== -1) {
+                        var filenameRegex = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/;
+                        var matches = filenameRegex.exec(disposition);
+                        if (matches != null && matches[1]) filename = matches[1].replace(/['"]/g, '');
+                    }
+
+                    var type = xhr.getResponseHeader('Content-Type');
+                    var blob = new Blob([response], { type: type });
+
+                    if (typeof window.navigator.msSaveBlob !== 'undefined') {
+                        // IE workaround for "HTML7007: One or more blob URLs were revoked by closing the blob for which they were created. These URLs will no longer resolve as the data backing the URL has been freed."
+                        window.navigator.msSaveBlob(blob, filename);
+                    } else {
+                        var URL = window.URL || window.webkitURL;
+                        var downloadUrl = URL.createObjectURL(blob);
+
+                        if (filename) {
+                            // use HTML5 a[download] attribute to specify filename
+                            var a = document.createElement("a");
+                            // safari doesn't support this yet
+                            if (typeof a.download === 'undefined') {
+                                window.location = downloadUrl;
+                            } else {
+                                a.href = downloadUrl;
+                                a.download = filename;
+                                document.body.appendChild(a);
+                                a.click();
+                            }
+                        } else {
+                            window.location = downloadUrl;
+                        }
+
+                        setTimeout(function () { URL.revokeObjectURL(downloadUrl); }, 100); // cleanup
+                    }
+                }
+            });
+        });
+
+    } );
+  </script>
+
+
+{%endblock%}
+{% block content %}
+
+
+
+  <div class="content-wrapper">    
+
+    {% include "infoView/banner.html"%}
+
+
+    <!-- Content Header (Page header) -->
+    <ul class="breadcrumb">
+       <li><a href="/">主页</a></li>
+       <li><a href="/dashboard/">控制台</a></li>
+       <li class="active">病人详细信息</li>
+    </ul>
+
+    <ul class="nav nav-tabs">
+      <li class="active"><a href="#home" data-toggle="tab" >病人基本信息</a></li>
+      <li class=""><a href="#cancer" data-toggle="tab" >肿瘤基本信息</a></li>
+      <li ><a href="#symptom" data-toggle="tab" >症状与体征</a></li>
+      <li ><a href="#treatment" data-toggle="tab" >治疗情况</a></li>
+      <li ><a href="#test" data-toggle="tab" >辅助检查</a></li>
+      <li ><a href="#followup" data-toggle="tab" >随访情况</a></li>
+      <li ><a href="#questionnaire" data-toggle="tab" >问卷评分</a></li>
+      <!--
+      <li class="dropdown">
+        <a class="dropdown-toggle" data-toggle="dropdown" href="#">
+          其他操作 <span class="caret"></span>
+        </a>
+        <ul class="dropdown-menu">
+          <li><a href="#" target="_blank" data-toggle="tab">下载病人信息</a></li>
+          <li class="divider"></li>
+          <li><a href="#" target="_blank" data-toggle="tab">修改病人信息</a></li>
+          <li class="divider"></li>
+          <li><a href="#" target="_blank" data-toggle="tab">添加日志</a></li>
+        </ul>
+      </li>
+    -->
+    </li>
+    </ul>
+
+    <!-- Content Header (Page header) -->
+    <section class="content-header">
+      <h1>
+        病人详细信息
+        <!--<small>电子病历 从未如此优雅</small>-->
+      </h1>
+      <ol class="breadcrumb">
+        <li><a href=""><i class="fa fa-dashboard"></i> 主页</a></li>
+        <li class="active">病人详细信息</li>
+      </ol>
+    </section>
+
+    <!-- Main content -->
+    <section class="content">
+
+      <div id="myTabContent" class="tab-content">
+
+        <div class="tab-pane fade active in" id="home">
+
+          <div class="row">
+            <div class="col-md-12">
+              <div class="box">
+                <div class="box-header with-border">
+                  <h3 class="box-title">{{patient.name}} &nbsp;</h3>
+                  
+                  <!-- TAGS -->
+                  <span class="label label-success">已出院</span>
+
+                  {% if patient.relative_in_contact%}
+                  <span class="label label-info">随访中</span>
+                  {%endif%}
+
+                  {% if patient.DOD%}
+                  <span class="label label-danger">已去世</span>
+                  {%endif%}
+
+                  <div class="box-tools pull-right">
+                    <button class="btn btn-box-tool" data-widget="collapse"><i class="fa fa-minus"></i></button>
+                    <button class="btn btn-box-tool" data-widget="remove"><i class="fa fa-times"></i></button>
+                  </div>
+                </div><!-- /.box-header -->
+                <div class="box-body">
+                  <div class="row">
+                  
+                    <div class="col-md-4"><!-- /.col basic info table-->
+                        <p class="text-center">
+                         <strong>基本信息</strong>
+                            <small class="description-percentage"><a href='/dashboard/db/patient/edit/{{patient.DB_ID}}/{{patient.id}}/' ><i class="ion ion-edit" style='margin-left:20px;' alt='点击以编辑'></i></a></small>
+                            <small class="description-percentage" onclick="return confirm('确定删除该病人的全部信息？');" style="position:relative;margin-right: 5px;"><a href='/dashboard/db/patient/delete/{{patient.DB_ID}}/{{patient.id}}/' ><i class="ion ion-trash-a" style='margin-left:5px;' alt='点击以删除'></i></a></small>
+                        </p>
+                        <div class="box">
+                          <div class="box-body table-responsive no-padding" style="overflow-y: scroll; height:300px;">
+                            <table class="table table-hover">
+
+                              <tr>
+                                <td><strong>姓名: {{patient.name}}</strong></td>
+                              </tr>
+                              <tr>
+                                <td><strong>性别: {{patient.sex}}</strong></td>
+                              </tr>
+                              <tr>
+                                <td><strong>出生年月: {{patient.get_standard_DOB_date}}</strong></td>
+                              </tr>
+                              <tr>
+                                <td><strong>地区: {{patient.location}}</strong></td>
+                              </tr>
+                              <tr>
+                                <td><strong>数据库编号(病历号): {{patient.DB_ID}}({{patient.get_standard_EMR_id}})</strong></td>
+                              </tr>
+                              <tr>
+                                <td><strong>随访电话: {{patient.phone}}</strong></td>
+                              </tr>
+                              <tr>
+                                <td>
+                                  <strong>诊断: 
+                                    {%for cancer in cancers%}
+                                    {%if cancer.diagnosis%}
+                                      <a href='/dashboard/db/cancer/?k={{cancer.diagnosis}}'>{{cancer.diagnosis}}</a>&nbsp;({{cancer.get_standard_admission_date_date}})
+                                      <br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+                                    {%endif%}
+                                    {%endfor%}
+                                  </strong>
+                                </td>
+                              </tr>
+
+                            </table>
+                          </div><!-- /.box-body -->
+                        </div><!-- /.box -->
+                    </div><!-- /.col basic info table-->
+                        
+                    <div class="col-md-8" ><!-- /.col basic info table-->
+                        <p class="text-center">
+                         <strong>临床事件</strong>
+                        </p>
+                      <div class="box">
+                        
+                        <div class="box-body table-responsive no-padding" style="overflow-y: scroll; height:300px;">
+                          {%if tests%}
+                            <table class="table table-hover">
+                              {%for test in tests%}
+                              <col width="15%">
+                              <col width="15%">
+                              <col width="70%">
+                              {% if test.result_discription or test.diagosis %}
+                              
+                              <tr>
+                                <td><strong>{{test.get_project_name_display}}</strong></td>
+                                <td>{{test.get_standard_project_date_date}}</td>
+                                <td><strong>结果描述</strong>: {{test.result_discription}}
+                                  <br><strong>诊断结论</strong>: {{test.diagosis}}
+                                </td>
+                              </tr>
+                              {%endif%}
+                          
+                              {%endfor%}
+
+                              {%for cancer in cancers%}
+                              <col width="15%">
+                              <col width="15%">
+                              <col width="70%">
+                              {%if cancer.diagnosis%}
+                              <tr>
+                                <td><strong>诊断</strong></td>
+                                <td>{{cancer.get_standard_admission_date_date}}</td>
+                                <td><a href='/dashboard/db/cancer/?k={{cancer.diagnosis}}'>{{cancer.diagnosis}}</a></td>
+                              </tr>
+                              {%endif%}
+                              {%endfor%}
+
+                              {%for treatment in treatments%}
+                              <col width="15%">
+                              <col width="15%">
+                              <col width="70%">
+                              {%if treatment.surgery_date%}
+                              <tr>
+                                <td><strong>{{treatment.get_location_display}}{{treatment.get_approach_display}}手术</strong></td>
+                                <td>{{treatment.surgery_date}}</td>
+                                <td>{{treatment.surgeon}}</td>
+                              </tr>
+                              {%endif%}
+                              {%endfor%}
+                            </table>
+                          {%else%}
+                            <div class="panel panel-info" style="width:95%;margin-top:20px;margin-left:auto;margin-right:auto;">
+                              <div class="panel-heading" >
+                                <h4>暂无临床事件</h4>
+                                
+                              </div>
+                            </div>
+                          {%endif%}
+                        </div><!-- /.box-body -->
+                      </div><!-- /.box -->
+                    </div><!-- /.col basic info table-->
+                  </div><!-- /.row -->
+                </div><!-- ./box-body -->
+
+                <div class="box-footer">
+                  <div class="row">
+                    <div class="col-sm-3 col-xs-6">
+                      <div class="description-block border-right">
+                        <h4 class="description-percentage"><a href='/dashboard/db/patient/edit/{{patient.DB_ID}}/{{patient.id}}/' ><i class="ion ion-edit" style='margin-left:20px;' alt='点击以编辑'>&nbsp;编辑&nbsp;</i></a></h4>
+                        <small class="description-text">编辑该病人的相关信息</small>
+                      </div><!-- /.description-block -->
+                    </div><!-- /.col -->
+                    <div class="col-sm-3 col-xs-6">
+                      <div class="description-block border-right">
+                      {%if not patient.tagged%}  
+                        
+                        <form method="post" action='/dashboard/mark/{{patient.DB_ID}}/' id="mark_form">
+                          {% csrf_token %}
+                          <h4 class="description-percentage"><a name='mark' href="javascript:{}" onclick="document.getElementById('mark_form').submit();"><i class="ion ion-bookmark" style='margin-left:20px;' alt='标记该病人'>&nbsp;标记&nbsp;</i></a></h4>
+                        </form>
+                        
+                        <small class="description-text">标记该病人供日后检索</small>
+                      {%else%}
+
+                        <form method="post" action='/dashboard/mark/{{patient.DB_ID}}/' id="mark_form">
+                          {% csrf_token %}
+                          <h4 class="description-percentage"><a name='mark' href="javascript:{}" onclick="document.getElementById('mark_form').submit();"><i class="ion ion-bookmark marked-icon" style='margin-left:20px;' alt='标记该病人'>&nbsp;已标记&nbsp;</i></a></h4>
+                        </form>
+                        <small class="description-text">检索所有<a href='/dashboard/#marked'>已标记病人</a></small>
+                      {%endif%}
+                      </div><!-- /.description-block -->
+                    </div><!-- /.col -->
+                    <div class="col-sm-3 col-xs-6">
+                      <div class="description-block border-right">
+                        <h4 class="description-percentage"><a href='#email' ><i class="ion ion-paper-airplane" style='margin-left:20px;' alt='点击以发送该病人信息'>&nbsp;发送&nbsp;</i></a></h4>
+                        <small class="description-text">发送该病人信息至其他医师</small>
+                      </div><!-- /.description-block -->
+                    </div><!-- /.col -->
+                    <div class="col-sm-3 col-xs-6">
+                      <div class="description-block border-right">
+                        <h4 class="description-percentage"><a href='/TODO/' ><i class="ion ion-ios-cloud-download-outline" style='margin-left:20px;' alt='点击以下载'>&nbsp;下载（beta）&nbsp;</i></a></h4>
+                        <small class="description-text">保存该病人的基本信息至本地</small>
+                      </div><!-- /.description-block -->
+                    </div>
+                  </div><!-- /.row -->
+                </div><!-- /.box-footer -->
+
+              </div><!-- /.box -->
+            </div><!-- /.col -->
+          </div><!-- /.row -->
+
+
+          <div class="row">
+            <!-- Left col -->
+            <section class="col-lg-7 connectedSortable">
+              <!-- TO DO List -->
+              <div class="box box-primary">
+                <div class="box-header">
+                  <i class="ion ion-clipboard"></i>
+                  <h3 class="box-title">重要事件时间轴</h3>
+                  <div class="box-tools pull-right">
+                    <button class="btn btn-box-tool" data-widget="collapse"><i class="fa fa-minus"></i></button>
+                    <button class="btn btn-box-tool" data-widget="remove"><i class="fa fa-times"></i></button>
+                  </div>
+                </div><!-- /.box-header -->
+                <div class="box-body">
+                  <section class="content">
+                    <!-- row -->
+                    <div class="row">
+                      <div class="col-md-12" style="overflow-y: scroll; height:500px;">
+                        <!-- The time line -->
+                        <ul class="timeline">
+                          <!-- timeline time label -->
+                          <li class="time-label">
+                            <span class="bg-red">
+                              {% now "Y" %}/{% now "M" %}
+                            </span>
+                          </li>
+                          <!-- /.timeline-label -->
+                          <!-- timeline item -->
+                          {%for cancer in cancers%}
+                          <li>
+                            <i class="fa fa-heartbeat bg-yellow"></i>
+                            <div class="timeline-item">
+                              <span class="time"><i class="fa fa-clock-o"></i> {{cancer.get_standard_admission_date_date}}</span>
+                              <h3 class="timeline-header"><a href="#">肿瘤信息</a>诊断  <a >详细信息
+                                <span1><p>诊断详情：{{cancer.diagnosis}}<br>
+                                       诊断依据：{{cancer.diagnosis_basis}}<br>
+                                       入院日期：{{cancer.get_standard_admission_date_date}}<br>
+                                       出院日期：{{cancer.get_standard_discharge_date_date}}</p>
+                                </span1></a>
+                              </h3>
+                              <div class="timeline-body">
+                                {{cancer.diagnosis}}
+                              </div>
+                            </div>
+                          </li>
+                          <!-- END timeline item -->
+                          {%endfor%}
+
+                          {%for test in tests%}
+                          <!-- timeline item -->
+                          <li>
+                            <i class="fa fa-stethoscope bg-aqua"></i>
+                            <div class="timeline-item">
+                              <span class="time"><i class="fa fa-clock-o"></i> {{test.get_standard_project_date_date}}</span>
+                              <h3 class="timeline-header no-border"><a href="#">{{test.get_project_name_display}}</a>结果描述  <a >详细信息
+                                <span1><p>项目日期：{{test.get_standard_project_date_date}}<br>
+                                       项目名称：{{test.project_name}}<br>
+                                       结果描述：{{test.result_discription}}<br>
+                                       诊断：{{test.diagosis}}<br>
+                                       </p>
+                                </span1></a>
+                              </h3>
+                              <div class="timeline-body">
+                                {{test.result_discription}}
+                              </div>
+                            </div>
+                          </li>
+                          <!-- END timeline item -->
+                          {%endfor%}
+
+                          <!--
+                          <li class="time-label">
+                            <span class="bg-green">
+                              2014/08
+                            </span>
+                          </li>
+                          <li>
+                            <i class="fa fa-camera bg-purple"></i>
+                            <div class="timeline-item">
+                              <span class="time"><i class="fa fa-clock-o"></i> 2014/07/22</span>
+                              <h3 class="timeline-header"><a href="#">检查结果</a> 胸透</h3>
+                              <div class="timeline-body">
+                                <img src="http://placehold.it/150x100" alt="..." class="margin">
+                                <img src="http://placehold.it/150x100" alt="..." class="margin">
+                                <img src="http://placehold.it/150x100" alt="..." class="margin">
+                                <img src="http://placehold.it/150x100" alt="..." class="margin">
+                              </div>
+                            </div>
+                          </li>
+                          -->
+                          
+                          <li>
+                            <i class="fa fa-clock-o bg-gray"></i>
+                          </li>
+                        </ul>
+                      </div><!-- /.col -->
+                    </div><!-- /.row -->
+                  </section><!-- /.content -->
+                </div><!-- /.box-body -->
+              </div><!-- /.box -->
+            </section><!-- /.Left col -->
+            
+            <!-- right col (We are only adding the ID to make the widgets sortable)-->
+            <section class="col-lg-5 connectedSortable">
+
+              <!-- TABLE: LATEST ORDERS -->
+              <div class="box box-info">
+                <div class="box-header with-border">
+                 <i class="ion ion-android-cloud-done"></i> 
+
+                  <h3 class="box-title">相似病人</h3>
+                  <div class="box-tools pull-right">
+                    <button class="btn btn-box-tool" data-widget="collapse"><i class="fa fa-minus"></i></button>
+                    <button class="btn btn-box-tool" data-widget="remove"><i class="fa fa-times"></i></button>
+                  </div>
+                </div><!-- /.box-header -->
+                <div class="box-body">
+                  <div class="table-responsive">
+                    {%if similar_patients%}
+                    <table class="table no-margin">
+                      <thead>
+                        <tr>
+                          <th>姓名</th>
+                          <th>病历号</th>
+                          <th>诊断</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {%for patient in similar_patients%}
+                        <tr>
+                          <td><a href='/dashboard/get/{{patient.DB_ID}}/'>{{patient.name}}</a></td>
+                          <td><a href='/dashboard/get/{{patient.DB_ID}}/'>{{patient.get_standard_EMR_id}}</a></td>
+                          <td><strong><mark>{{patient.diagnosis}}</mark></strong></td>
+                        </tr>
+                        {%endfor%}
+                      </tbody>
+                    </table>
+                    {%else%}
+                    <div class="panel panel-info" style="width:95%;margin-top:20px;margin-left:auto;margin-right:auto;">
+                      <div class="panel-heading" >
+                        <h4>无相似病人</h4>
+                      </div>
+                    </div>
+                    {%endif%}
+                  </div><!-- /.table-responsive -->
+                </div><!-- /.box-body -->
+                {%if similar_patients%}
+                <div class="box-footer clearfix">
+                  <!--TODO-->
+                  <a href="/dashboard/db/cancer/?k={{cancers.0.diagnosis}}" class="btn btn-sm btn-default btn-flat pull-right">查看全部</a>
+                </div><!-- /.box-footer -->
+                {%endif%}
+              </div><!-- /.box -->
+
+
+              <!-- NOTE -->
+              <div class="box box-primary">
+                <div class="box-header with-border">
+                 <i class="ion ion-document-text"></i> 
+                  <h3 class="box-title">备注</h3>
+                  <div class="box-tools pull-right">
+                    <button class="btn btn-box-tool" data-widget="collapse"><i class="fa fa-minus"></i></button>
+                    <button class="btn btn-box-tool" data-widget="remove"><i class="fa fa-times"></i></button>
+                  </div>
+                </div><!-- /.box-header -->
+                <div class="box-body">
+                  <ul class="products-list product-list-in-box">
+                  {%if posts%}
+                  {% for p in posts|slice:":5" %}
+                    <li class="item">
+                      <div class="product-info">
+                        <a href="/virtual/get/{{p.related_exp.experiment_id}}/" class="product-title">{{p.subject}}</a>
+                        <span class="product-description">
+                          {{p.content}}
+                          <p >Posted by {% autoescape off %}{{p.created_by.get_taged_investigator_name}}{% endautoescape %} on {{p.created_date}}</p>
+                          {%if p.updated_by.NTID != None %}
+                          <p>Last Modified by {% autoescape off %}{{p.updated_by.get_taged_investigator_name}}{% endautoescape %} on {{p.updated_date}}</p>
+                          {%endif%}
+                        </span>
+                      </div>
+                    </li><!-- /.item -->
+                  {% endfor %}
+                  {%else%}
+                    <div class="panel panel-info" style="width:95%;margin-top:20px;margin-left:auto;margin-right:auto;">
+                      <div class="panel-heading" >
+                        <h4>暂无备注</h4>
+                        <small class="description-percentage"><a href='#' ><i class="ion ion-compose" style='margin-left:20px;' alt='点击以编辑'>&nbsp;点击以添加（beta）&nbsp;</i></a></small>
+                      </div>
+                    </div>
+                  {%endif%}
+                  </ul>
+                </div><!-- /.box-body -->
+              </div><!-- /.box -->
+
+
+              <!-- quick email widget -->
+              <div class="box box-info" id='email'>
+                <div class="box-header">
+                  <i class="fa fa-envelope"></i>
+                  <h3 class="box-title">邮件联系</h3>
+                  <!-- tools box -->
+                  <div class="box-tools pull-right">
+                    <button class="btn btn-box-tool" data-widget="collapse"><i class="fa fa-minus"></i></button>
+                    <button class="btn btn-box-tool" data-widget="remove"><i class="fa fa-times"></i></button>
+                  </div>
+                </div>
+                <div class="box-body">
+                  <form id='email_form' method='POST'>
+                   {% csrf_token %}
+                    <div class="form-group">
+                      <input type="email" class="form-control" name="emailto" placeholder="发送至:" id='email-to'/>
+                    </div>
+                    <div class="form-group">
+                      <input type="text" class="form-control" name="subject" placeholder="主题:" id='email-subject'/>
+                    </div>
+                    <div>
+                      <textarea class="textarea" placeholder="内容" style="width: 100%; height: 125px; font-size: 14px; line-height: 18px; border: 1px solid #dddddd; padding: 10px;" name='content' id='email-content'>
+                        病人姓名: {{patient.name}}<br>
+                        数据库编号: {{patient.DB_ID}}<br>
+                        链接：{{request.build_absolute_uri}}
+
+                      </textarea>
+                    </div>
+                  </form>
+                </div>
+                <div class="box-footer clearfix">
+                  <button type="submit" form='email_form' class="pull-right btn btn-default" name='sendEmail' id="sendEmail">发送 <i class="fa fa-arrow-circle-right"></i></button>
+                </div>
+              </div>
+
+            </section><!-- right col -->
+          </div><!-- /.row (main row) -->
+        </div> <!--tab 1-->
+       
+
+        <div class="tab-pane fade" id="cancer">
+          <section class="content">
+          <div class="panel panel-info" style="width:95%;margin-top:20px;margin-left:auto;margin-right:auto;">
+            <div class="panel-heading" >
+              <h3>肿瘤基本信息
+                <small class="description-percentage"><a href='/dashboard/db/cancer/add/{{patient.DB_ID}}/' ><i class="ion ion-plus-round" style='margin-left:5px;' alt='点击以添加'></i></a></small>
+              </h3>
+
+            </div>
+            <!-- START ACCORDION & CAROUSEL-->
+                <div class="row">
+                  <div class="col-md-12">
+                    <div class="box box-solid">
+                      <div class="box-body">
+                        <div class="box-group" id="accordion">
+                          <!-- we are adding the .panel class so bootstrap.js collapse plugin detects it -->
+                          {% if not cancers %}
+                            <div class="panel-heading" >
+                              <h4>暂无肿瘤基本信息记录</h4>
+                              <small class="description-percentage"><a href='/dashboard/db/cancer/add/{{patient.DB_ID}}/' ><i class="ion ion-compose" style='margin-left:20px;' alt='点击以添加'>&nbsp;点击以添加&nbsp;</i></a></small>
+                            </div>
+                          {% else %}
+                          {% for cancer in cancers%}
+
+                          <div class="panel box box-primary">
+                            <div class="box-header with-border">
+                              <h4 class="box-title">
+                                <a data-toggle="collapse" data-parent="#accordion" href="#collapse-cancer-{{forloop.counter}}" >
+                                  ID:{{cancer.id}} - 入院日期：{{cancer.get_standard_admission_date_date}} - 出院日期： {{cancer.get_standard_discharge_date_date}}
+                                  <small class="description-percentage" style="position:relative;margin-right: 5px;"><a href='/dashboard/db/cancer/edit/{{patient.DB_ID}}/{{cancer.id}}/' ><i class="ion ion-edit" style='margin-left:20px;' alt='点击以编辑'></i></a></small>
+                                  <small class="description-percentage" onclick="return confirm('确定删除该记录？');" style="position:relative;margin-right: 5px;"><a href='/dashboard/db/cancer/delete/{{patient.DB_ID}}/{{cancer.id}}/' ><i class="ion ion-trash-a" style='margin-left:5px;' alt='点击以删除'></i></a></small>
+                                </a>
+                              </h4>
+                            </div>
+                            <div id="collapse-cancer-{{forloop.counter}}" class="panel-collapse collapse">
+                              <div class="box-body">
+                                <div class="box">
+                                  <div class="box-body table-responsive no-padding" style="overflow-y: scroll; height:260px">
+                                    <table class="table table-hover">
+
+                                      <tr>
+                                        <td><strong>住院科室: {{cancer.get_department_display}}</strong></td>
+                                      </tr>
+                                      <tr>
+                                        <td><strong>术前诊断: {{cancer.pre_diagnosis}}</strong></td>
+                                      </tr>
+                                      <tr>
+                                        <td><strong>最终诊断: {{cancer.diagnosis}}</strong></td>
+                                      </tr>
+                                      <tr>
+                                        <td><strong>诊断依据: {{cancer.get_diagnosis_basis_display}}</strong></td>
+                                      </tr>
+                                      <tr>
+                                        <td><strong>肿瘤性质: {{cancer.get_cancer_property_display}}</strong></td>
+                                      </tr>
+                                      <tr>
+                                        <td><strong>肿瘤分类: {{cancer.get_cancer_type_display}}</strong></td>
+                                      </tr>
+                                      <tr>
+                                        <td><strong>肿瘤复发: {{cancer.get_recurrence_display}}</strong></td>
+                                      </tr>
+                                      <tr>
+                                        <td><strong>脊柱病灶数目: {{cancer.get_focus_display}}</strong></td>
+                                      </tr>
+                                      <tr>
+                                        <td><strong>肿瘤部位: {{cancer.get_location_display}}</strong></td>
+                                      </tr>
+                                      <tr>
+                                        <td><strong>脊柱外骨累及: {{cancer.get_infection_spinal_display}}</strong></td>
+                                      </tr>
+                                      <tr>
+                                        <td><strong>原发灶外重要脏器累及: {{cancer.get_infection_organ_display}}</strong></td>
+                                      </tr>
+                                      <tr>
+                                        <td><strong>重要脏器累及可控制: {{cancer.get_infection_organ_controllable_display}}</strong></td>
+                                      </tr>
+                                      <tr>
+                                        <td><strong>备注: {{cancer.comment}}</strong></td>
+                                      </tr>
+                                    </table>
+                                  </div><!-- /.box-body -->
+                                </div><!-- /.box -->
+                              </div>
+                            </div>
+                          </div>
+                          {%endfor%}
+                          {%endif%}
+
+                        </div>
+                      </div><!-- /.box-body -->
+                    </div><!-- /.box -->
+                  </div><!-- /.col -->
+            </div><!--end-->
+          </div>
+        </section>
+        </div>  <!--tab 2-->
+
+
+        <div class="tab-pane fade" id="symptom">
+          <section class="content">
+          <div class="panel panel-info" style="width:95%;margin-top:20px;margin-left:auto;margin-right:auto;">
+            <div class="panel-heading" >
+              <h3>症状与体征
+                <small class="description-percentage"><a href='/dashboard/db/symptom/add/{{patient.DB_ID}}/' ><i class="ion ion-plus-round" style='margin-left:5px;' alt='点击以添加'></i></a></small>
+              </h3>
+            </div>
+                <!-- START ACCORDION & CAROUSEL-->
+                <div class="row">
+                  <div class="col-md-12">
+                    <div class="box box-solid">
+                      <div class="box-body">
+                        <div class="box-group" id="accordion">
+                          <!-- we are adding the .panel class so bootstrap.js collapse plugin detects it -->
+                          {% if not symptoms %}
+                            <div class="panel-heading" >
+                              <h4>暂无治疗情况记录</h4>
+                              <small class="description-percentage"><a href='/dashboard/db/symptom/add/{{patient.DB_ID}}/' ><i class="ion ion-compose" style='margin-left:20px;' alt='点击以添加'>&nbsp;点击以添加&nbsp;</i></a></small>
+                            </div>
+                          {% else %}
+                          {% for symptom in symptoms%}
+
+                          <div class="panel box box-primary">
+                            <div class="box-header with-border">
+                              <h4 class="box-title">
+                                <a data-toggle="collapse" data-parent="#accordion" href="#collapse-symptom-{{forloop.counter}}">
+                                  ID:{{symptom.id}} - 入院日期：{{symptom.get_standard_admission_date_date}}
+                                  <small class="description-percentage"><a href='/dashboard/db/symptom/edit/{{patient.DB_ID}}/{{symptom.id}}/' ><i class="ion ion-edit" style='margin-left:20px;' alt='点击以编辑'></i></a></small>
+                                  <small class="description-percentage" onclick="return confirm('确定删除该记录？');" style="position:relative;margin-right: 5px;"><a href='/dashboard/db/symptom/delete/{{patient.DB_ID}}/{{symptom.id}}/' ><i class="ion ion-trash-a" style='margin-left:5px;' alt='点击以删除'></i></a></small>
+                                </a>
+                              </h4>
+                            </div>
+                            <div id="collapse-symptom-{{forloop.counter}}" class="panel-collapse collapse ">
+                              <div class="box-body">
+                                <div class="box">
+                                  <div class="box-body table-responsive no-padding" style="overflow-y: scroll; height:260px">
+                                    <table class="table table-hover">
+
+                                      <tr>
+                                        <td><strong>疼痛VAS（轻中重）t为不清: {{symptom.pain_VAS}}</strong></td>
+                                      </tr>
+                                      <tr>
+                                        <td><strong>夜间痛: {{symptom.get_night_pain_display}}</strong></td>
+                                      </tr>
+                                      <tr>
+                                        <td><strong>疼痛需卧床缓解: {{symptom.get_stay_in_bed_display}}</strong></td>
+                                      </tr>
+                                      <tr>
+                                        <td><strong>根性疼痛: {{symptom.get_root_pain_display}}</strong></td>
+                                      </tr>
+                                      <tr>
+                                        <td><strong>肢体麻木无力: {{symptom.get_numb_display}}</strong></td>
+                                      </tr>
+                                      <tr>
+                                        <td><strong>体表包块: {{symptom.get_enclosed_mass_display}}</strong></td>
+                                      </tr>
+                                      <tr>
+                                        <td><strong>小便异常: {{symptom.get_abnormal_urine_display}}</strong></td>
+                                      </tr>
+                                      <tr>
+                                        <td><strong>病程时间（月）: {{symptom.duration}}</strong></td>
+                                      </tr>
+                                      <tr>
+                                        <td><strong>最重病变水平以远肌力: {{symptom.get_muscle_display}}</strong></td>
+                                      </tr>
+                                      <tr>
+                                        <td><strong>最重病变水平以远感觉: {{symptom.get_feel_display}}</strong></td>
+                                      </tr>
+                                    </table>
+                                  </div><!-- /.box-body -->
+                                </div><!-- /.box -->
+                              </div>
+                            </div>
+                          </div>
+                          {%endfor%}
+                          {%endif%}
+
+                        </div>
+                      </div><!-- /.box-body -->
+                    </div><!-- /.box -->
+                  </div><!-- /.col -->
+            </div><!--end-->
+          </div>
+        </section>
+        </div> <!--tab 3-->
+
+        <div class="tab-pane fade" id="treatment">
+          <section class="content">
+          <div class="panel panel-info" style="width:95%;margin-top:20px;margin-left:auto;margin-right:auto;">
+            <div class="panel-heading" >
+              <h3>治疗情况
+                <small class="description-percentage"><a href='/dashboard/db/treatment/add/{{patient.DB_ID}}/' ><i class="ion ion-plus-round" style='margin-left:5px;' alt='点击以添加'></i></a></small>
+              </h3>
+            </div><!-- /.box-body -->
+
+                <!-- START ACCORDION & CAROUSEL-->
+                <div class="row">
+                  <div class="col-md-12">
+                    <div class="box box-solid">
+                      <div class="box-body">
+                        <div class="box-group" id="accordion">
+                          <!-- we are adding the .panel class so bootstrap.js collapse plugin detects it -->
+                          {% if not treatments %}
+                            <div class="panel-heading" >
+                              <h4>暂无治疗情况记录</h4>
+                              <small class="description-percentage"><a href='/dashboard/db/treatment/add/{{patient.DB_ID}}/ ' ><i class="ion ion-compose" style='margin-left:20px;' alt='点击以添加'>&nbsp;点击以添加&nbsp;</i></a></small>
+                            </div>
+                          {% else %}
+                          {% for treatment in treatments%}
+
+                          <div class="panel box box-primary">
+                            <div class="box-header with-border">
+                              <h4 class="box-title">
+                                <a data-toggle="collapse" data-parent="#accordion" href="#collapse-treatment-{{forloop.counter}}">
+                                  ID:{{treatment.id}} - 手术日期：{{treatment.get_standard_surgery_date_date}} - 术者： {{treatment.surgeon}}
+                                  <small class="description-percentage"><a href='/dashboard/db/treatment/edit/{{patient.DB_ID}}/{{treatment.id}}/' ><i class="ion ion-edit" style='margin-left:20px;' alt='点击以编辑'></i></a></small>
+                                  <small class="description-percentage" onclick="return confirm('确定删除该记录？');" style="position:relative;margin-right: 5px;"><a href='/dashboard/db/treatment/delete/{{patient.DB_ID}}/{{treatment.id}}/' ><i class="ion ion-trash-a" style='margin-left:5px;' alt='点击以删除'></i></a></small>
+                                </a>
+                              </h4>
+                            </div>
+                            <div id="collapse-treatment-{{forloop.counter}}" class="panel-collapse collapse ">
+                              <div class="box-body">
+                                <div class="box">
+                                  <div class="box-body table-responsive no-padding" style="overflow-y: scroll; height:260px">
+                                    <table class="table table-hover">
+
+                                          <tr><td><strong>手术入路: {{treatment.get_approach_display}}</strong></td>
+                                          <tr><td><strong>手术部位: {{treatment.get_location_display}}</strong></td>
+                                          <tr><td><strong>手术方式: {{treatment.get_method_display}}</strong></td>
+                                          <tr><td><strong>肿瘤包膜破损情况: {{treatment.envelope_damage}}</strong></td>
+                                          <tr><td><strong>为保证边界牺牲的组织: {{treatment.sacrifice}}</strong></td>
+                                          <tr><td><strong>术中骨水泥强化: {{treatment.bone_cement}}</strong></td>
+                                          <tr><td><strong>术中射频消融: {{treatment.radiofrequency}}</strong></td>
+                                          <tr><td><strong>手术总时间（min）: {{treatment.total_time}}</strong></td>
+                                          <tr><td><strong>出血量（ml）: {{treatment.bleeding_vol}}</strong></td>
+                                          <tr><td><strong>异体血（ml）: {{treatment.allogeneic_blood}}</strong></td>
+                                          <tr><td><strong>术中并发症: {{treatment.surgery_complication}}</strong></td>
+                                          <tr><td><strong>术中备注: {{treatment.surgery_comment}}</strong></td>
+                                          <tr><td><strong>术后并发症: {{treatment.get_post_complication_display}}</strong></td>
+                                          <tr><td><strong>动脉栓塞（方式）: {{treatment.arterial_embolization_method}}</strong></td>
+                                          <tr><td><strong>动脉栓塞（动脉名称）: {{treatment.arterial_embolization_name}}</strong></td>
+                                          <tr><td><strong>经皮骨水泥加强（节段）: {{treatment.bone_cement_num}}</strong></td>
+                                          <tr><td><strong>经皮骨水泥加强（部位）: {{treatment.get_bone_cement_location_display}}</strong></td>
+                                          <tr><td><strong>支具支持治疗（支具类型）: {{treatment.get_support_therapy_type_display}}</strong></td>
+                                          <tr><td><strong>支具支持治疗（开始年月）: {{treatment.support_therapy_start_date}}</strong></td>
+                                          <tr><td><strong>放疗（总剂量 Gy）: {{treatment.radiotherapy_dose}}</strong></td>
+                                          <tr><td><strong>放疗（疗程）: {{treatment.radiotherapy_course}}</strong></td>
+                                          <tr><td><strong>放疗（开始日期）: {{treatment.radiotherapy_start_date}}</strong></td>
+                                          <tr><td><strong>化疗（方案）: {{treatment.chemotherapy_plan}}</strong></td>
+                                          <tr><td><strong>化疗（开始日期）: {{treatment.chemotherapy_start_date}}</strong></td>
+                                          <tr><td><strong>其他治疗（药物）: {{treatment.get_other_treatment_drug_display}}</strong></td>
+                                          <tr><td><strong>其他治疗（开始日期）: {{treatment.other_treatment_start_date}}</strong></td>
+                                          <tr><td><strong>其他治疗（结束日期）: {{treatment.other_treatment_end_date}}</strong></td>
+                                          <tr><td><strong>其他描述: {{treatment.comment}}</strong></td>
+
+                                    </table>
+                                </div><!-- /.box -->
+                                </div><!-- /.box-body -->
+                              </div>
+                            </div>
+                          </div>
+                          {%endfor%}
+                          {%endif%}
+
+                        </div>
+                    </div><!-- /.box -->
+                  </div><!-- /.col -->
+              </div>
+            </div>
+          </div>    
+        </section>
+        </div> <!--tab 4-->
+
+        <div class="tab-pane fade" id="test">
+          <section class="content">
+          <div class="panel panel-info" style="width:95%;margin-top:20px;margin-left:auto;margin-right:auto;">
+            <div class="panel-heading" >
+              <h3>辅助检查
+                <small class="description-percentage"><a href='/dashboard/db/test/add/{{patient.DB_ID}}/' ><i class="ion ion-plus-round" style='margin-left:5px;' alt='点击以添加'></i></a></small>
+              </h3>
+            </div>
+
+            <!-- START ACCORDION & CAROUSEL-->
+                <div class="row">
+                  <div class="col-md-12">
+                    <div class="box box-solid">
+                      <div class="box-body">
+                        <div class="box-group" id="accordion">
+                          <!-- we are adding the .panel class so bootstrap.js collapse plugin detects it -->
+                          {% if not tests %}
+                            <div class="panel-heading" >
+                              <h4>暂无辅助检查记录</h4>
+                              <small class="description-percentage"><a href='/dashboard/db/test/add/{{patient.DB_ID}}/' ><i class="ion ion-compose" style='margin-left:20px;' alt='点击以添加'>&nbsp;点击以添加&nbsp;</i></a></small>
+                            </div>
+                          {% else %}
+                          {% for test in tests%}
+
+                          <div class="panel box box-primary">
+                            <div class="box-header with-border">
+                              <h4 class="box-title">
+                                <a data-toggle="collapse" data-parent="#accordion" href="#collapse-test-{{forloop.counter}}">
+                                  ID:{{test.id}} - 项目名称：{{test.project_name}} - 项目日期： {{test.get_standard_project_date_date}}
+                                  <small class="description-percentage"><a href='/dashboard/db/test/edit/{{patient.DB_ID}}/{{test.id}}/' ><i class="ion ion-edit" style='margin-left:20px;' alt='点击以编辑'></i></a></small>
+                                  <small class="description-percentage" onclick="return confirm('确定删除该记录？');" style="position:relative;margin-right: 5px;"><a href='/dashboard/db/test/delete/{{patient.DB_ID}}/{{test.id}}/' ><i class="ion ion-trash-a" style='margin-left:5px;' alt='点击以删除'></i></a></small>
+                                </a>
+                              </h4>
+                            </div>
+                            <div id="collapse-test-{{forloop.counter}}" class="panel-collapse collapse">
+                              <div class="box-body">
+                                <div class="box">
+                                  <div class="box-body table-responsive no-padding" style="overflow-y: scroll; height:260px">
+                                    <table class="table table-hover">
+
+                                      <tr>
+                                        <td><strong>结果描述: {{test.result_discription}}</strong></td>
+                                      </tr>
+                                      <tr>
+                                        <td><strong>诊断结论: {{test.diagosis}}</strong></td>
+                                      </tr>
+                                      <tr>
+                                        <td><strong>是否术前检查: {{test.get_pre_test_display}}</strong></td>
+                                      </tr>
+                                      <tr>
+                                        <td><strong>WBB分期(1-12): {{test.wbb_1_12}}</strong></td>
+                                      </tr>
+                                      <tr>
+                                        <td><strong>WBB分期(A-F): {{test.wbb_A_F}}</strong></td>
+                                      </tr>
+                                      <tr>
+                                        <td><strong>CT病变性质: {{test.get_CT_property_display}}</strong></td>
+                                      </tr>
+                                      <tr>
+                                        <td><strong>X光顺列: {{test.get_X_ray_display}}</strong></td>
+                                      </tr>
+                                      <tr>
+                                        <td><strong>塌陷: {{test.get_collapse_display}}</strong></td>
+                                      </tr>
+                                      <tr>
+                                        <td><strong>后外侧受累: {{test.get_lateral_involvement_display}}</strong></td>
+                                      </tr>
+                                      <tr>
+                                        <td><strong>椎动脉受累: {{test.vertebral_artery_involvement}}</strong></td>
+                                      </tr>
+                                      <tr>
+                                        <td><strong>Enneking分期: {{test.enneking}}</strong></td>
+                                      </tr>
+                                      <tr>
+                                        <td><strong>备注: {{test.comment}}</strong></td>
+                                      </tr>
+                                    </table>
+                                  </div><!-- /.box-body -->
+                                </div><!-- /.box -->
+                              </div>
+                            </div>
+                          </div>
+                          {%endfor%}
+                          {%endif%}
+
+                        </div>
+                      </div><!-- /.box-body -->
+                    </div><!-- /.box -->
+                  </div><!-- /.col -->
+            </div><!--end-->
+
+          </div>
+        </section>
+        </div> <!--tab 5-->
+
+        <div class="tab-pane fade" id="followup">
+          <section class="content">
+          <div class="panel panel-info" style="width:95%;margin-top:20px;margin-left:auto;margin-right:auto;">
+            <div class="panel-heading" >
+              <h3>随访情况
+                <small class="description-percentage"><a href='/dashboard/db/followup/add/{{patient.DB_ID}}/' ><i class="ion ion-plus-round" style='margin-left:5px;' alt='点击以添加'></i></a></small>
+              </h3>
+            </div>
+                <!-- START ACCORDION & CAROUSEL-->
+                <div class="row">
+                  <div class="col-md-12">
+                    <div class="box box-solid">
+                      <div class="box-body">
+                        <div class="box-group" id="accordion">
+                          <!-- we are adding the .panel class so bootstrap.js collapse plugin detects it -->
+                          {% if not followups %}
+                            <div class="panel-heading" >
+                              <h4>暂无随访情况记录</h4>
+                              <small class="description-percentage"><a href='/dashboard/db/followup/add/{{patient.DB_ID}}/' ><i class="ion ion-compose" style='margin-left:20px;' alt='点击以添加'>&nbsp;点击以添加&nbsp;</i></a></small>
+                            </div>
+                          {% else %}
+                          {% for followup in followups%}
+
+                          <div class="panel box box-primary">
+                            <div class="box-header with-border">
+                              <h4 class="box-title">
+                                <a data-toggle="collapse" data-parent="#accordion" href="#collapse-followup-{{forloop.counter}}">
+                                  ID:{{followup.id}} - 主诉： {{followup.major_complain}} - 随访日期： {{followup.get_standard_followup_date_date}}
+                                  <small class="description-percentage"><a href='/dashboard/db/followup/edit/{{patient.DB_ID}}/{{followup.id}}/' ><i class="ion ion-edit" style='margin-left:20px;' alt='点击以编辑'></i></a></small>
+                                  <small class="description-percentage" onclick="return confirm('确定删除该记录？');" style="position:relative;margin-right: 5px;"><a href='/dashboard/db/followup/delete/{{patient.DB_ID}}/{{followup.id}}/' ><i class="ion ion-trash-a" style='margin-left:5px;' alt='点击以删除'></i></a></small>
+                                </a>
+                              </h4>
+                            </div>
+                            <div id="collapse-followup-{{forloop.counter}}" class="panel-collapse collapse ">
+                              <div class="box-body"> <!--{% if forloop.counter == 1 %}in{% endif %}-->
+                                <div class="box">
+                                  <div class="box-body table-responsive no-padding" style="overflow-y: scroll; height:260px">
+                                    <table class="table table-hover">
+
+                                      <tr>
+                                        <td><strong>复发: {{followup.get_recurrence_display}}</strong></td>
+                                      </tr>
+                                      <tr>
+                                        <td><strong>转移: {{followup.get_transfer_display}}</strong></td>
+                                      </tr>
+                                      <tr>
+                                        <td><strong>内固定松动: {{followup.get_fixation_loose_display}}</strong></td>
+                                      </tr>
+                                      <tr>
+                                        <td><strong>内固定断裂: {{followup.get_fixation_break_display}}</strong></td>
+                                      </tr>
+                                      <tr>
+                                        <td><strong>CT融合: {{followup.get_CT_fusion_display}}</strong></td>
+                                      </tr>
+                                      <tr>
+                                        <td><strong>随访方式: {{followup.get_method_display}}</strong></td>
+                                      </tr>
+                                      <tr>
+                                        <td><strong>死亡日期: {{followup.DOD}}</strong></td>
+                                      </tr>
+                                      <tr>
+                                        <td><strong>备注: {{followup.comment}}</strong></td>
+                                      </tr>
+                                    </table>
+                                  </div><!-- /.box-body -->
+                                </div><!-- /.box -->
+                              </div>
+                            </div>
+                          </div>
+                          {%endfor%}
+                          {%endif%}
+
+                        </div>
+                      </div><!-- /.box-body -->
+                    </div><!-- /.box -->
+                  </div><!-- /.col -->
+            </div><!--end-->
+
+          </div>
+          </section>
+        </div> <!--tab 6-->
+
+        <div class="tab-pane fade" id="questionnaire">
+          <section class="content">
+          <div class="panel panel-info" style="width:95%;margin-top:20px;margin-left:auto;margin-right:auto;">
+            <div class="panel-heading" >
+              <h3>问卷评分
+                <small class="description-percentage"><a href='/dashboard/db/questionnaire/add/{{patient.DB_ID}}/' ><i class="ion ion-plus-round" style='margin-left:5px;' alt='点击以添加'></i></a></small>
+              </h3>
+            </div>
+
+                <!-- START ACCORDION & CAROUSEL-->
+                <div class="row">
+                  <div class="col-md-12">
+                    <div class="box box-solid">
+                      <div class="box-body">
+                        <div class="box-group" id="accordion">
+                          <!-- we are adding the .panel class so bootstrap.js collapse plugin detects it -->
+                          {% if not questionnaires %}
+                            <div class="panel-heading" >
+                              <h4>暂无问卷评分记录</h4>
+                              <small class="description-percentage"><a href='/dashboard/db/questionnaire/add/{{patient.DB_ID}}/' ><i class="ion ion-compose" style='margin-left:20px;' alt='点击以编辑'>&nbsp;点击以添加&nbsp;</i></a></small>
+                            </div>
+                          {% else %}
+                          {% for questionnaire in questionnaires%}
+
+                          <div class="panel box box-primary">
+                            <div class="box-header with-border">
+                              <h4 class="box-title">
+                                <a data-toggle="collapse" data-parent="#accordion" href="#collapse-questionnaire-{{forloop.counter}}">
+                                  ID:{{questionnaire.id}} - 问卷日期： {{questionnaire.date}}
+                                  <small class="description-percentage"><a href='/dashboard/db/questionnaire/edit/{{patient.DB_ID}}/{{questionnaire.id}}/' ><i class="ion ion-edit" style='margin-left:20px;' alt='点击以编辑'></i></a></small>
+                                  <small class="description-percentage" onclick="return confirm('确定删除该记录？');" style="position:relative;margin-right: 5px;"><a href='/dashboard/db/questionnaire/delete/{{patient.DB_ID}}/{{questionnaire.id}}/' ><i class="ion ion-trash-a" style='margin-left:5px;' alt='点击以删除'></i></a></small>
+                                </a>
+                              </h4>
+                            </div>
+                            <div id="collapse-questionnaire-{{forloop.counter}}" class="panel-collapse collapse ">
+                              <div class="box-body">
+                                <div class="box">
+                                  <div class="box-body table-responsive no-padding" style="overflow-y: scroll; height:260px">
+                                    <table class="table table-hover">
+
+                                      <tr>
+                                        <td><strong>EQ5D-1: {{questionnaire.EQ5D_1}}</strong></td>
+                                      </tr>
+                                      <tr>
+                                        <td><strong>EQ5D-2: {{questionnaire.EQ5D_2}}</strong></td>
+                                      </tr>
+                                      <tr>
+                                        <td><strong>EQ5D-3: {{questionnaire.EQ5D_3}}</strong></td>
+                                      </tr>
+                                      <tr>
+                                        <td><strong>EQ5D-4: {{questionnaire.EQ5D_4}}</strong></td>
+                                      </tr>
+                                      <tr>
+                                        <td><strong>EQ5D-5: {{questionnaire.EQ5D_5}}</strong></td>
+                                      </tr>
+                                    </table>
+                                  </div><!-- /.box-body -->
+                                </div><!-- /.box -->
+                              </div>
+                            </div>
+                          </div>
+                          {%endfor%}
+                          {%endif%}
+
+                        </div>
+                      </div><!-- /.box-body -->
+                    </div><!-- /.box -->
+                  </div><!-- /.col -->
+            </div><!--end-->
+
+          </div>
+          </section>
+        </div> <!--tab 7-->
+
+      </div>
+      
+    </section><!-- /.content -->
+  </div><!-- /.content-wrapper -->
+
+
+{% endblock %}
+

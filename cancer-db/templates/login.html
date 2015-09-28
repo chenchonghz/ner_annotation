@@ -1,0 +1,45 @@
+
+{% load staticfiles %}
+{% block script %}
+
+        <link rel='stylesheet' href='http://fonts.googleapis.com/css?family=PT+Sans:400,700'>
+        <link rel="stylesheet" href="{% static "login/css/reset.css" %}" />
+        <link rel="stylesheet" href="{% static "login/css/supersized.css" %}"/>
+        <link rel="stylesheet" href="{% static "login/css/style.css" %}"/>
+
+
+
+{% endblock %}
+
+{% block content %}
+<body>
+
+        <div class="page-container">
+            <h1>北医三院骨科 肿瘤信息平台</h1>
+         <form action="/accounts/login/" method="post">{% csrf_token %}
+	    <div><p><font color="red"><strong>{{user_id_error}}</strong></font></p></div>
+	    <input type="text" name="username" value="{{user_id}}" id="username" placeholder="用户名 ">
+	    <div><font color="red"><strong>{{passwd_error}}</strong></font></div>
+	    <input type="password" name="password" value="" id="password" placeholder="密码">
+	    <div><font color="red"><strong>{{validate_error}}</strong></font></div>
+            <button type="submit">登陆</button>
+	    <div  class="error"><span>+</span></div>
+	  </form>
+
+            <div class="connect">
+<!--
+		<p><a href='/help/#login'>无法登陆？</a>&nbsp;&nbsp;<a href='/account/register/'>注册</a></p>
+-->
+
+            </div>
+        </div>
+
+        <!-- Javascript -->
+        <script src="{% static "login/js/jquery-1.8.2.min.js" %}"></script>
+	    <script src="{% static "login/js/supersized.3.2.7.min.js" %}"></script>
+        <script src="{% static "login/js/supersized-init.js" %}"></script>
+        <script src="{% static "login/js/supersized-init.js" %}"></script>
+
+    </body>
+
+{% endblock %}

@@ -1,0 +1,8 @@
+node_modules/
+*.bak
+js/bundle.js
+
+index2.html
+index3.html
+js/test.js
+css/test.css

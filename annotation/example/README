@@ -1,0 +1,13 @@
+A Simple Annotation Editor
+- Press 'Left-Arrow' / 'Right-Arrow' to move cursor
+- Click anywhere to move cursor
+- Press 'Space' to add separator
+- Press 'Delete' to remove separator
+
+Setup
+1. Install node [https://nodejs.org/]
+2. Install npm [https://www.npmjs.com/]
+3. npm install
+4. [in one terminal] npm run start
+5. [in another terminal] sudo python -m SimpleHTTPServer 8080
+6. Open browser and hit http://localhost:8080/index.html

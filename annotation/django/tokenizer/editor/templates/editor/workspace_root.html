@@ -1,0 +1,36 @@
+{% load staticfiles %}
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <link href="{% static 'editor/css/bootstrap.min.css' %}" rel="stylesheet">
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h3 class="text-muted">Welcome</h3>
+      </div>
+      <hr />
+       <div class="row">
+       <!-- Display the current logged in username and the link to logout
+        -->
+      <div class="alert alert-success">user name {{ user.username }}.</div>
+      <!-- 'url' template tage takes the name of the URL pattern
+           as an argument and renders the URL path. Here it renders
+           the path to the logout URL.
+      -->
+      <a href="{% url 'logout_editor' %}">log out</a>
+         
+       </div>
+       </div>
+    </div>
+    <div class="container">
+      <div class="header">
+        <h3 class="text-muted">Please choose task：</h3>
+      </div>
+      <div class="row">
+        <a href="{% url 'workspace_ner' %}" class="btn btn-info"> Attribution annotation </a>
+      </div>
+    </div>
+
+  </body>
+</html>

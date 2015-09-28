@@ -1,0 +1,474 @@
+<!DOCTYPE HTML>
+{% extends "base.html" %}
+{% load staticfiles %}
+
+{%block script%}
+    <script src="{% static "js/jquery.dataTables.js" %}"></script>
+    <link rel="stylesheet" href="{% static "css/jquery.dataTables.css" %}" />
+
+
+    <style>
+        div.dataTables_filter {
+            text-align: left;
+        }
+        .col-sm-6 {
+            width: 20%;
+        }
+      .filterMatches { background-color: #FFFF00; }
+    </style>
+
+    <script>
+    function getCookie(name) {
+        var cookieValue = null;
+        if (document.cookie && document.cookie != '') {
+            var cookies = document.cookie.split(';');
+            for (var i = 0; i < cookies.length; i++) {
+                var cookie = jQuery.trim(cookies[i]);
+                // Does this cookie string begin with the name we want?
+                if (cookie.substring(0, name.length + 1) == (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+    $.extend( $.fn.DataTable.defaults, {
+        "searching": true,
+        "ordering": true
+    } );
+    $(document).ready(function() {
+        //hide empty columns
+        $('#recent tr th').each(function(i) {
+         //select all tds in this column
+         var tds = $(this).parents('table')
+                  .find('tr td:nth-child(' + (i + 1) + ')');
+            //check if all the cells in this column are empty
+            if(tds.length == tds.filter(':empty').length) { 
+                //hide header
+                $(this).hide();
+                //hide cells
+                tds.hide();
+            } 
+        });
+        var table = $('#recent').DataTable( {
+            {%if k%}
+            "oSearch": {"sSearch": "{{k}}"},
+            {%endif%}
+            //highlight search text, CHECK
+            "fnRowCallback": function( nRow, aData, iDisplayIndex, iDisplayIndexFull) {
+                var settings = this.fnSettings();
+                var str = settings.oPreviousSearch.sSearch;
+                var regex = new RegExp( str, 'i');
+                $('td', nRow).each( function(i) {
+                    this.innerHTML = aData[i].replace( regex, function(matched) { return "<span class='filterMatches'>"+matched+"</span>";});
+                });
+                return nRow;
+            },
+            "language": {
+                "url": "//cdn.datatables.net/plug-ins/1.10.8/i18n/Chinese.json"
+            },
+            "scrollX": "150%",
+            "scrollY": 450,
+            "pageLength": 100,
+            "bAutoWidth": true ,
+            "fixedHeader": true,
+            "order": [[ 0, "desc" ]],
+            "columnDefs": [
+                {
+                    // The `data` parameter refers to the data for the cell (defined by the
+                    // `data` option, which defaults to the column being worked with, in
+                    // this case `data: 0`.
+            className: "dt-center",
+            "render": function ( data, type, row ) {
+                        return data;
+                    },
+                    "targets": "_all"//[0,1,2,3,4,5]
+                },
+                { "visible": false,  "targets": [ ] }
+            ]
+        } );
+
+
+        $('#download-csv').click(function() {
+            var filtered = table.rows({filter:'applied'})[0];
+            // There's a known issue with jQuery ajax when dealing with binary data (http://bugs.jquery.com/ticket/11461).
+            // Use vanilla javascript ajax to get around the problem.
+            var httpRequest;
+            if (window.XMLHttpRequest) {
+                httpRequest = new XMLHttpRequest()
+            } else if (window.ActiveXObject) {  // IE 6 and older
+                httpRequest = new ActiveXObject("Microsoft.XMLHTTL")
+            }
+            httpRequest.onreadystatechange = function() {
+                if (httpRequest.readyState === 4) {
+                    if (httpRequest.status === 200) {
+                        // check for a filename
+                        var filename = '';
+                        var disposition = httpRequest.getResponseHeader('Content-Disposition');
+                        if (disposition && disposition.indexOf('attachment') !== -1) {
+                            var filenameRegex = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/;
+                            var matches = filenameRegex.exec(disposition);
+                            if (matches != null && matches[1]) filename = matches[1].replace(/['"]/g, '');
+                        }
+                        var type = httpRequest.getResponseHeader('Content-Type');
+                        var blob = new Blob([httpRequest.response], { type: type });
+                        if (typeof window.navigator.msSaveBlob !== 'undefined') {
+                            // IE workaround for "HTML7007: One or more blob URLs were revoked by closing the blob for which they were created. These URLs will no longer resolve as the data backing the URL has been freed."
+                            window.e.msSaveBlob(blob, filename);
+                        } else {
+                            var URL = window.URL || window.webkitURL;
+                            var downloadUrl = URL.createObjectURL(blob);
+                            if (filename) {
+                                // use HTML5 a[download] attribute to specify filename
+                                var a = document.createElement("a");
+                                // safari doesn't support this yet
+                                if (typeof a.download === 'undefined') {
+                                    window.location = downloadUrl;
+                                } else {
+                                    a.href = downloadUrl;
+                                    a.download = filename;
+                                    document.body.appendChild(a);
+                                    a.click();
+                                }
+                            } else {
+                                window.location = downloadUrl;
+                            }
+                            setTimeout(function () { URL.revokeObjectURL(downloadUrl); }, 100); // cleanup
+                        }
+                    }
+                }
+            };
+            httpRequest.open('POST', 'download');
+            httpRequest.responseType = "arraybuffer";
+            httpRequest.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+            var data = filtered.map(function(index) {
+                return encodeURIComponent('indexes[]') + '=' + encodeURIComponent(index);
+            }).join('&') +
+                '&csrfmiddlewaretoken=' + encodeURIComponent(getCookie('csrftoken'))
+            httpRequest.send(data);
+        });
+        /*
+        var HIDDEN_COLUMN_INDEX = 2;
+        table.on('search', function () {
+            if (table.search().length) {
+                table.column(HIDDEN_COLUMN_INDEX).visible(true);
+            } else {
+                table.column(HIDDEN_COLUMN_INDEX).visible(false);
+            }
+        });
+        table.column(HIDDEN_COLUMN_INDEX).visible(false);
+        */
+    } );
+    
+    </script>
+{%endblock%}
+
+{%block content%}
+
+
+    <div class="content-wrapper">
+
+        {% include "infoView/banner.html"%}
+
+        <ul class="breadcrumb">
+          <li><a href="/">主页</a></li>
+          <li><a href="/dashboard/">控制台</a></li>
+          <li class="active">{{db_name_ch}}数据库</li>
+        </ul>
+        <!-- Content Header (Page header) -->
+        <section class="content-header">
+          <h1>
+            {{db_name_ch}}数据库
+            <small><div id="download-csv"><i class="ion ion-ios-cloud-download-outline" style='margin-left:20px;' alt='click to download'>&nbsp;下载数据库</i></div></small>
+          </h1>
+        </section>
+        <!-- Main content -->
+        <section class="content">
+          <div class="row">
+            <div class="col-xs-12">
+
+              <div class="box">
+                <div class="box-header">
+                </div><!-- /.box-header -->
+                <div class="box-body">
+        
+                    <table class="table table-bordered table-striped" id="recent" class="display" cellspacing="0" width="100%">
+                        <thead>
+                            <tr>
+                                <th>姓名</th>
+                                <th>病历号</th>
+                                
+                                {% if db_name == "patient" %}
+                                    <th>性别</th>
+                                    <th>出生年月</th>
+                                    <!--<th>身份证号</th>-->
+                                    <th>地区</th>
+                                    <th>随访电话</th>
+                                    <th>去世日期</th>
+                                    <th>关系</th>
+                                    <th>电话</th>
+                                    <th>Email</th>
+                                    <th>微信</th>
+                                    <th>在随访中</th>
+                                {% endif %}
+
+                                {% if db_name == "cancer" %}
+                                    <th>入院日期</th>
+                                    <th>出院日期</th>
+                                    <th>住院科室</th>
+                                    <th>术前诊断</th>
+                                    <th>最终诊断</th>
+                                    <th>诊断依据</th>
+                                    <th>肿瘤性质</th>
+                                    <th>肿瘤分类</th>
+                                    <th>肿瘤复发</th>
+                                    <th>脊柱病灶数目</th>
+                                    <th>肿瘤部位</th>
+                                    <th>脊柱外骨累及</th>
+                                    <th>原发灶外重要脏器累及</th>
+                                    <th>重要脏器累及可控制</th>
+                                    <th>备注</th>
+
+                                {% endif %}
+
+
+                                {% if db_name == "symptom" %}
+                                    <th>入院日期</th>
+                                    <th>疼痛VAS（轻中重）t为不清</th>
+                                    <th>夜间痛</th>
+                                    <th>疼痛需卧床缓解</th>
+                                    <th>根性疼痛</th>
+                                    <th>肢体麻木无力</th>
+                                    <th>体表包块</th>
+                                    <th>小便异常</th>
+                                    <th>病程时间（月）</th>
+                                    <th>最重病变水平以远肌力</th>
+                                    <th>最重病变水平以远感觉</th>
+                                {% endif %}
+
+
+                                {% if db_name == "treatment" %}
+                                    <th>手术日期</th>
+                                    <th>术者</th>
+                                    <th>手术入路</th>
+                                    <th>手术部位</th>
+                                    <th>手术方式</th>
+                                    <th>肿瘤包膜破损情况</th>
+                                    <th>为保证边界牺牲的组织</th>
+                                    <th>术中骨水泥强化</th>
+                                    <th>术中射频消融</th>
+                                    <th>手术总时间（min）</th>
+                                    <th>出血量（ml）</th>
+                                    <th>异体血（ml）</th>
+                                    <th>术中并发症</th>
+                                    <th>术中备注</th>
+                                    <th>术后并发症</th>
+                                    <th>动脉栓塞（方式）</th>
+                                    <th>动脉栓塞（动脉名称）</th>
+                                    <th>经皮骨水泥加强（节段）</th>
+                                    <th>经皮骨水泥加强（部位）</th>
+                                    <th>支具支持治疗（支具类型）</th>
+                                    <th>支具支持治疗（开始年月）</th>
+                                    <th>放疗（总剂量 Gy）</th>
+                                    <th>放疗（疗程）</th>
+                                    <th>放疗（开始日期）</th>
+                                    <th>化疗（方案）</th>
+                                    <th>化疗（开始日期）</th>
+                                    <th>其他治疗（药物）</th>
+                                    <th>其他治疗（开始日期）</th>
+                                    <th>其他治疗（结束日期）</th>
+                                    <th>其他描述</th>
+                                {% endif %}
+
+
+                                {% if db_name == "test" %}
+                                    <th>项目日期</th>
+                                    <th>项目名称</th>
+                                    <th>结果描述</th>
+                                    <th>诊断结论</th>
+                                    <th>是否术前检查</th>
+                                    <th>WBB分期(1-12)</th>
+                                    <th>WBB分期(A-F)</th>
+                                    <th>CT病变性质</th>
+                                    <th>X光顺列</th>
+                                    <th>塌陷</th>
+                                    <th>后外侧受累</th>
+                                    <th>椎动脉受累</th>
+                                    <th>Enneking分期</th>
+                                    <th>备注</th>
+                                {% endif %}
+
+                                {% if db_name == "followup" %}
+                                    <th>主诉</th>
+                                    <th>复发</th>
+                                    <th>转移</th>
+                                    <th>内固定松动</th>
+                                    <th>内固定断裂</th>
+                                    <th>CT融合</th>
+                                    <th>随访方式</th>
+                                    <th>死亡日期</th>
+                                    <th>随访日期</th>
+                                    <th>备注</th>
+
+                                {% endif %}
+
+
+                                {% if db_name == "questionnaire" %}
+                                    <th>EQ5D-1</th>
+                                    <th>EQ5D-2</th>
+                                    <th>EQ5D-3</th>
+                                    <th>EQ5D-4</th>
+                                    <th>EQ5D-5</th>
+                                    <th>问卷日期</th>
+                                {% endif %}
+                                <!--
+                                
+                                -->
+                            </tr>
+                        </thead>
+                        
+
+                        <tbody>
+                                {% for obj in objs %}
+                                        <tr>
+                                            <td><a href="{{obj.get_absolute_url}}">{{obj.name}}</a></td>
+                                            <td><a href="{{obj.get_absolute_url}}">{{obj.get_standard_EMR_id}}</a></td>
+
+                                            {% if db_name == "patient" %}
+                                                <td>{{obj.sex}}</td>
+                                                <td>{{obj.get_standard_DOB_date}}</td>
+                                                <!--<td>{{obj.social_id}}</td>-->
+                                                <td>{{obj.location}}</td>
+                                                <td>{{obj.phone}}</td>
+                                                <td>{{obj.DOD}}</td>
+                                                <td>{{obj.get_relative_display}}</td>
+                                                <td>{{obj.relative_phone}}</td>
+                                                <td>{{obj.relative_email}}</td>
+                                                <td>{{obj.relative_wechat}}</td>
+                                                <td>{{obj.get_relative_in_contact_display}}</td>
+                                            {% endif %}
+
+
+                                            {% if db_name == "cancer" %}
+                                                <td>{{obj.get_standard_admission_date_date}}</td>
+                                                <td>{{obj.get_standard_discharge_date_date}}</td>
+                                                <td>{{obj.get_department_display}}</td>
+                                                <td>{{obj.pre_diagnosis}}</td>
+                                                <td>{{obj.diagnosis}}</td>
+                                                <td>{{obj.get_diagnosis_basis_display}}</td>
+                                                <td>{{obj.get_cancer_property_display}}</td>
+                                                <td>{{obj.get_cancer_type_display}}</td>
+                                                <td>{{obj.get_recurrence_display}}</td>
+                                                <td>{{obj.get_focus_display}}</td>
+                                                <td>{{obj.get_location_display}}</td>
+                                                <td>{{obj.get_infection_spinal_display}}</td>
+                                                <td>{{obj.get_infection_organ_display}}</td>
+                                                <td>{{obj.get_infection_organ_controllable_display}}</td>
+                                                <td>{{obj.comment}}</td>
+                                            {% endif %}
+
+
+                                            {% if db_name == "symptom" %}
+                                                <td>{{obj.get_standard_admission_date_date}}</td>
+                                                <td>{{obj.pain_VAS}}</td>
+                                                <td>{{obj.get_night_pain_display}}</td>
+                                                <td>{{obj.get_stay_in_bed_display}}</td>
+                                                <td>{{obj.get_root_pain_display}}</td>
+                                                <td>{{obj.get_numb_display}}</td>
+                                                <td>{{obj.get_enclosed_mass_display}}</td>
+                                                <td>{{obj.get_abnormal_urine_display}}</td>
+                                                <td>{{obj.duration}}</td>
+                                                <td>{{obj.get_muscle_display}}</td>
+                                                <td>{{obj.get_feel_display}}</td>
+                                            {% endif %}
+
+
+                                            {% if db_name == "treatment" %}
+                                                <td>{{obj.get_standard_surgery_date_date}}</td>
+                                                <td>{{obj.surgeon}}</td>
+                                                <td>{{obj.get_approach_display}}</td>
+                                                <td>{{obj.get_location_display}}</td>
+                                                <td>{{obj.get_method_display}}</td>
+                                                <td>{{obj.envelope_damage}}</td>
+                                                <td>{{obj.sacrifice}}</td>
+                                                <td>{{obj.bone_cement}}</td>
+                                                <td>{{obj.radiofrequency}}</td>
+                                                <td>{{obj.total_time}}</td>
+                                                <td>{{obj.bleeding_vol}}</td>
+                                                <td>{{obj.allogeneic_blood}}</td>
+                                                <td>{{obj.surgery_complication}}</td>
+                                                <td>{{obj.surgery_comment}}</td>
+                                                <td>{{obj.get_post_complication_display}}</td>
+                                                <td>{{obj.arterial_embolization_method}}</td>
+                                                <td>{{obj.arterial_embolization_name}}</td>
+                                                <td>{{obj.bone_cement_num}}</td>
+                                                <td>{{obj.get_bone_cement_location_display}}</td>
+                                                <td>{{obj.get_support_therapy_type_display}}</td>
+                                                <td>{{obj.support_therapy_start_date}}</td>
+                                                <td>{{obj.radiotherapy_dose}}</td>
+                                                <td>{{obj.radiotherapy_course}}</td>
+                                                <td>{{obj.radiotherapy_start_date}}</td>
+                                                <td>{{obj.chemotherapy_plan}}</td>
+                                                <td>{{obj.chemotherapy_start_date}}</td>
+                                                <td>{{obj.get_other_treatment_drug_display}}</td>
+                                                <td>{{obj.other_treatment_start_date}}</td>
+                                                <td>{{obj.other_treatment_end_date}}</td>
+                                                <td>{{obj.comment}}</td>
+                                            {% endif %}
+
+
+                                            {% if db_name == "test" %}
+                                                <td>{{obj.get_standard_project_date_date}}</td>
+                                                <td>{{obj.project_name}}</td>
+                                                <td>{{obj.result_discription}}</td>
+                                                <td>{{obj.diagosis}}</td>
+                                                <td>{{obj.get_pre_test_display}}</td>
+                                                <td>{{obj.wbb_1_12}}</td>
+                                                <td>{{obj.wbb_A_F}}</td>
+                                                <td>{{obj.get_CT_property_display}}</td>
+                                                <td>{{obj.get_X_ray_display}}</td>
+                                                <td>{{obj.get_collapse_display}}</td>
+                                                <td>{{obj.get_lateral_involvement_display}}</td>
+                                                <td>{{obj.vertebral_artery_involvement}}</td>
+                                                <td>{{obj.enneking}}</td>
+                                                <td>{{obj.comment}}</td>
+                                            {% endif %}
+
+                                            {% if db_name == "followup" %}
+                                                <td>{{obj.major_complain}}</td>
+                                                <td>{{obj.get_recurrence_display}}</td>
+                                                <td>{{obj.get_transfer_display}}</td>
+                                                <td>{{obj.get_fixation_loose_display}}</td>
+                                                <td>{{obj.get_fixation_break_display}}</td>
+                                                <td>{{obj.get_CT_fusion_display}}</td>
+                                                <td>{{obj.get_method_display}}</td>
+                                                <td>{{obj.DOD}}</td>
+                                                <td>{{obj.followup_date}}</td>
+                                                <td>{{obj.comment}}</td>
+                                                
+                                            {% endif %}
+
+                                            {% if db_name == "questionnaire" %}
+                                                <td>{{obj.EQ5D_1}}</td>
+                                                <td>{{obj.EQ5D_2}}</td>
+                                                <td>{{obj.EQ5D_3}}</td>
+                                                <td>{{obj.EQ5D_4}}</td>
+                                                <td>{{obj.EQ5D_5}}</td>
+                                                <td>{{obj.get_standard_date_date}}</td>
+                                            {% endif %}
+
+                                        </tr>
+
+                                {% endfor %}
+                        </tbody>
+                    </table>
+
+                </div><!-- /.box-body -->
+              </div><!-- /.box -->
+            </div><!-- /.col -->
+          </div><!-- /.row -->
+        </section><!-- /.content -->
+    </div>
+
+{%endblock%}
