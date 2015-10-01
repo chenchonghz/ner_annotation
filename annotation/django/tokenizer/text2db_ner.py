@@ -13,7 +13,7 @@ from ner import models
 
 import codecs
 
-WORKER_ID = 20
+WORKER_ID = 8
 worker = User.objects.get(pk=WORKER_ID)
 adjudicator = User.objects.get(pk=1) # default user
 N_FILES_TO_ADD = 100
